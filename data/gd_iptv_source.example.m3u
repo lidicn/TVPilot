@@ -1,0 +1,14 @@
+# 脱敏样例：真实 data/gd_iptv_source.m3u 含 user:pass@ 凭据，已 .gitignore 排除
+# 真实 URL 带 URL-userinfo 形式的账号与口令（示例已移除该段）
+# 样例已去掉 URL userinfo；使用前自行补上认证，凭据一律不落盘
+
+#EXTM3U x-tvg-url="https://raw.githubusercontent.com/fanmingming/live/main/e.xml"
+
+#EXTINF:-1 tvg-name="深圳卫视" group-title="广东本地",深圳卫视
+http://192.168.2.200:1984/api/stream.m3u8?src=iptv_%E6%B7%B1%E5%9C%B3%E5%8D%AB%E8%A7%86
+
+#EXTINF:-1 tvg-name="深圳都市" group-title="广东本地",深圳都市
+http://192.168.2.200:1984/api/stream.m3u8?src=iptv_%E6%B7%B1%E5%9C%B3%E9%83%BD%E5%B8%82
+
+
+# 其余 95 条频道格式同上

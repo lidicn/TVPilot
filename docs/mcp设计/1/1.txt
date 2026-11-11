@@ -1,0 +1,45 @@
+收到提单。我先核对约束：零新依赖、≤10 工具、描述 ≤80 字符、截图只回 URL、不改动 §1 四个文件、stdio + HTTP/SSE 双传输。下面直接落地 tvpilot/mcp.py、单测和使用示例，并在沙箱里真跑一遍验证（用桩替代真仓，因为读不到 E:/NAS）。
+
+Add clean flag to _ok_content for blueprint bypass
+运行 Python 代码
+思考已完成
+运行 Python 代码
+思考已完成
+运行 Python 代码
+Add sys import to first cell and rerun tests
+运行 Python 代码
+思考已完成
+24 个测试过了 23 个——第 7 条暴露一个真 bug：防御性的 ok/cost_ms 清洗把蓝图汇总里的 ok 字段也误删了。修一下：清洗只作用于直接工具数据，蓝图汇总保留自身 ok 语义。
+
+Generate usage examples and final report with design, decisions, and references
+运行 Python 代码
+Verify POST /mcp with quick HTTP smoke test
+运行 Python 代码
+思考已完成
+运行 Python 代码
+思考已完成
+交付完成，已在沙箱用桩包真跑：24 条单测全过、stdio 子进程握手通过、HTTP POST /mcp 冒烟通过。
+交付物
+tvpilot/mcp.py（新增，~460 行，零新依赖：仅标准库 + tvpilot 内部模块）
+tests/test_mcp.py（24 条用例，逐条对应 §8 验收 + 边界/异常路径）
+USAGE.md（启动、客户端接入、curl 调试、环境变量表）
+设计要点
+10 个工具（恰好收敛到上限）：tv_zap / tv_keyevent / tv_tap / tv_input_text / tv_launch_app / tv_go_home / tv_foreground / tv_screenshot / tv_system_state / tv_blueprint_run。复合流程（回桌面、开设置、zap_to 等）全部走 tv_blueprint_run，这是省 token 的主要手段。
+省 token 三件套：tools/call 直接回传三元组里的 data 并剥掉 ok/cost_ms；content 用紧凑 JSON（无空格、中文不转义）；截图只回 URL，蓝图 steps 只留 {step, ok, status, error}，丢弃 output 回显。
+传输：stdio（换行分隔 JSON-RPC）+ HTTP（POST /mcp 走 JSON-RPC、GET /mcp 开 SSE 心跳流、GET /healthz）。2025-03-26 握手回 protocolVersion + capabilities.tools + serverInfo。
+截图 240p：base64 → 纯标准库 PNG 解码（zlib + 五种 filter 反解）→ 最近邻降采样到宽 426 → 落盘 → 懒启动静态文件服务回 URL。非 PNG / 隔行 / 非 8bit 一律保留原图并在响应里带 note（fail-open，绝不因降采样失败丢图）。
+§7 关键决策与理由
+归一化口径：只有三元组按 (data, err, msg) 解释，二元组视为成功数据——与 blueprint.py 的 normalize_tool_result 同口径，避免把 (ok, msg) 误判失败（有专门单测）。
+fail-closed：协议层错误（未知方法/工具、非法请求）回 JSON-RPC error；参数非法、工具三元组报错、工具抛异常 → 一律 isError: true，server 不炸。
+fail-open 两处：截图降采样失败保留原图；tool_screenshot 老签名无 width 参数时 TypeError 降级为无参调用。
+ok/cost_ms 清洗只作用于直接工具数据——首轮测试抓到蓝图汇总里的 ok 被误删，已修：那是业务语义不是包装。
+截图服务独立于 /mcp 端口：stdio 模式下没有 HTTP 端点可复用，统一懒启动专用静态服务（端口可用 TVPILOT_MCP_SHOT_PORT 固定、TVPILOT_MCP_BASE_URL 手动指定前缀）。LAN IP 用 UDP connect 探测，可用环境变量覆盖。
+蓝图 Runner 懒加载 + 模块级 _runner：测试注入假 runner 即可，不触真机。
+需求里说不清、我没有猜的地方（请提单方确认）
+tool_screenshot 的真实签名与返回键名未知（收缩件没内联 screenshot.py）。我按"优先 width= kwarg，降级无参；base64 键依次认 base64/b64/image/data；已有 url 键直接透传"的宽容适配处理。落地前请按 §1 快照指纹读真仓核对，若键名不同只需改 _t_screenshot 里一个元组。
+tool_screenshot 返回的是 PNG 还是 JPEG 未知。JPEG 无法纯标准库降采样，会原样落盘并带 note=unsupported_png_kept_original，此时 width 报实际值而非 426——验收第 5 条若用 JPEG 真机会挂，需确认格式。
+截图文件无清理机制：落盘累积靠 OS 清临时目录。是否需要 TTL 清理，提单未说，未实现。
+SSE 只做了心跳流：2025-03-26 的 server→client 主动推送（如 tools/list_changed）没有业务触发点，未实现会话态管理（Mcp-Session-Id 无状态）。
+tv_system_state 的返回结构未知，原样透传 data（剥 ok/cost_ms 后），未做字段裁剪。
+§7 提到的收缩缺口（_ensure_mytv_foreground_inner、zap_via_adb_digits、default_tools()、BlueprintRunner.run 等行号区间）本实现全部只按 §0 列出的函数名级契约调用，未按签名猜实现——但 BlueprintRunner.run(name, params) 的位置参数形态是从 §1 文档字符串确认的，落地前建议对一遍真仓。
+无桩实现遗留：三个交付文件全部实跑验证，§7 无"未完成"条目。

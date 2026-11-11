@@ -1,0 +1,8 @@
+# 行尾纪律：.py 一律 LF；其余文档/数据以现读为准
+# 配合仓库级 core.autocrlf=false，非 .py 文件字节原样入库
+*.py text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pyc binary

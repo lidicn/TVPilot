@@ -1,0 +1,19 @@
+services:
+  tvpilot:
+    build: .
+    container_name: tvpilot
+    restart: unless-stopped
+    ports:
+      # 规范：必须绑定局域网 IP，禁止 0.0.0.0（避免与 tailscaled 冲突）
+      - "192.168.2.200:8090:8090"
+    volumes:
+      # 频道表外挂只读，更新无需重建镜像
+      - ./channels.json:/app/channels.json:ro
+      # 操作存档持久化（JSONL + 失败截图）
+      - ./data:/app/data
+      # v0.9: 不再挂载 docker.sock（安全加固，go2rtc 改由其他方式管理）
+      # ADB 私钥运行时只读挂载（A-TV-02：私钥永不进镜像/构建上下文）
+      - ./secrets/adbkey:/root/.android/adbkey:ro
+      - ./secrets/adbkey.pub:/root/.android/adbkey.pub:ro
+    environment:
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}

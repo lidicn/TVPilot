@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="电视遥控">
+<meta name="theme-color" content="#0f0f1a">
+<link rel="manifest" href="/remote-static/manifest.json">
+<link rel="apple-touch-icon" href="/remote-static/icon-512.png">
+<title>我的电视 · 遥控器</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --bg: #0f0f1a;
+  --bg-card: #1a1a2e;
+  --bg-card-hover: #222240;
+  --border: rgba(255,255,255,0.08);
+  --text: #e0e0e0;
+  --text-dim: #888;
+  --accent: #4caf50;
+  --accent-glow: rgba(76,175,80,0.4);
+  --blue: #64b5f6;
+  --danger: #ef5350;
+}
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ===== 顶部状态栏 ===== */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+.top-bar .title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+}
+.status-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+.status-dot.online { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.offline { background: var(--danger); }
+.status-text { font-size: 11px; color: var(--text-dim); }
+.top-actions { display: flex; align-items: center; gap: 10px; }
+.launch-btn {
+  background: rgba(46, 204, 113, 0.15);
+  border: 1px solid rgba(46, 204, 113, 0.4);
+  color: #2ecc71;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.launch-btn:hover { background: rgba(46, 204, 113, 0.3); }
+.launch-btn:active { transform: scale(0.95); }
+.launch-btn.loading { opacity: 0.6; pointer-events: none; }
+
+/* ===== 当前播放卡片 ===== */
+.now-card {
+  margin: 0 16px 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--bg-card) 0%, #1e1e38 100%);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.now-card .label {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.now-card .channel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.now-card .ch-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.now-card .ch-no {
+  font-size: 13px;
+  color: var(--blue);
+  background: rgba(100,181,246,0.1);
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.now-card .program {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== Tab 内容区 ===== */
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 16px;
+}
+.tab-page { display: none; }
+.tab-page.active { display: block; }
+
+/* ===== 常用频道网格 ===== */
+.fav-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding-bottom: 16px;
+}
+.ch-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.ch-card:active {
+  transform: scale(0.94);
+  background: var(--bg-card-hover);
+}
+.ch-card.playing {
+  border-color: var(--accent);
+  background: rgba(76,175,80,0.08);
+}
+.ch-card.playing::after {
+  content: '▶';
+  position: absolute;
+  top: 6px; right: 8px;
+  font-size: 10px;
+  color: var(--accent);
+}
+.ch-logo {
+  width: 44px; height: 44px;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2a2a4a, #1a1a30);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--blue);
+  overflow: hidden;
+}
+.ch-card.playing .ch-logo {
+  background: linear-gradient(135deg, rgba(76,175,80,0.2), rgba(76,175,80,0.05));
+  color: var(--accent);
+}
+.ch-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ch-card.playing .ch-card-name { color: var(--accent); }
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin: 16px 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.empty-fav {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}
+.empty-fav .icon { font-size: 40px; margin-bottom: 10px; opacity: 0.5; }
+
+/* ===== 全部频道列表 ===== */
+.search-box {
+  position: relative;
+  margin-bottom: 12px;
+}
+.search-box input {
+  width: 100%;
+  padding: 11px 14px 11px 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+.search-box input:focus { border-color: var(--blue); }
+.search-box .si {
+  position: absolute;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.ch-list-item {
+  display: flex;
+  align-items: center;
+  padding: 11px 12px;
+  margin-bottom: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ch-list-item:active { background: var(--bg-card-hover); transform: scale(0.98); }
+.ch-list-item.playing { background: rgba(100,181,246,0.08); }
+.ch-list-no {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+.ch-list-item.playing .ch-list-no { background: rgba(100,181,246,0.15); color: var(--blue); }
+.ch-list-name { flex: 1; font-size: 15px; font-weight: 500; }
+.ch-list-item.playing .ch-list-name { color: var(--blue); font-weight: 600; }
+.ch-list-fav {
+  width: 28px; height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-dim);
+  opacity: 0.4;
+  transition: all 0.2s;
+}
+.ch-list-fav.faved { opacity: 1; color: #ffc107; }
+
+/* ===== 节目单模式 ===== */
+.epg-layout {
+  display: flex;
+  height: 100%;
+  gap: 0;
+}
+.epg-channels {
+  width: 110px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 4px 0;
+}
+.epg-ch-item {
+  padding: 10px 8px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.epg-ch-item:active { background: var(--bg-card-hover); }
+.epg-ch-item.active {
+  background: var(--bg-card);
+  border-left-color: var(--accent);
+}
+.epg-ch-item .n {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.epg-ch-item.active .n { color: var(--accent); }
+.epg-programs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 16px;
+}
+.epg-prog-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.epg-prog-item:active { opacity: 0.7; }
+.epg-prog-item.current {
+  background: rgba(76,175,80,0.06);
+  margin: 0 -12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-bottom: none;
+}
+.epg-time {
+  width: 45px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue);
+  padding-top: 1px;
+}
+.epg-prog-item.current .epg-time { color: var(--accent); }
+.epg-prog-info { flex: 1; }
+.epg-prog-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.epg-prog-item.current .epg-prog-name { color: var(--accent); }
+.epg-prog-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.epg-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* ===== 底部导航 ===== */
+.bottom-nav {
+  display: flex;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  flex-shrink: 0;
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  cursor: pointer;
+  color: var(--text-dim);
+  transition: color 0.2s;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item .ni-icon { font-size: 20px; }
+.nav-item .ni-label { font-size: 10px; font-weight: 600; }
+
+/* ===== 语音麦克风按钮（悬浮） ===== */
+.mic-fab {
+  position: fixed;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, #43a047 100%);
+  border: none;
+  box-shadow: 0 4px 20px var(--accent-glow), 0 0 0 4px rgba(76,175,80,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s;
+  touch-action: none;
+}
+.mic-fab:active {
+  transform: translateX(-50%) scale(0.92);
+  box-shadow: 0 2px 10px var(--accent-glow);
+}
+.mic-fab.listening {
+  background: linear-gradient(135deg, var(--danger) 0%, #c62828 100%);
+  box-shadow: 0 4px 20px rgba(239,83,80,0.5), 0 0 0 4px rgba(239,83,80,0.15);
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(239,83,80,0.5), 0 0 0 4px rgba(239,83,80,0.15); }
+  50% { box-shadow: 0 4px 30px rgba(239,83,80,0.7), 0 0 0 10px rgba(239,83,80,0.08); }
+}
+.mic-fab svg { width: 28px; height: 28px; fill: #fff; }
+.mic-hint {
+  position: fixed;
+  bottom: calc(142px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  z-index: 49;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  white-space: nowrap;
+}
+.mic-hint.show { opacity: 1; }
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed;
+  top: calc(60px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: rgba(30,30,50,0.95);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  z-index: 1000;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  max-width: 85%;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-left: 3px solid var(--accent); }
+.toast.error { border-left: 3px solid var(--danger); }
+
+/* ===== 语音识别覆盖层 ===== */
+.voice-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.voice-overlay.show { display: flex; }
+.voice-wave {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 40px;
+  margin-bottom: 20px;
+}
+.voice-wave span {
+  width: 5px;
+  background: var(--accent);
+  border-radius: 3px;
+  animation: wave 1s ease-in-out infinite;
+}
+.voice-wave span:nth-child(1) { animation-delay: 0s; height: 20px; }
+.voice-wave span:nth-child(2) { animation-delay: 0.1s; height: 35px; }
+.voice-wave span:nth-child(3) { animation-delay: 0.2s; height: 25px; }
+.voice-wave span:nth-child(4) { animation-delay: 0.3s; height: 40px; }
+.voice-wave span:nth-child(5) { animation-delay: 0.4s; height: 30px; }
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+.voice-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  padding: 0 30px;
+  min-height: 28px;
+}
+.voice-hint-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 12px;
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="top-bar">
+  <div class="title">我的电视</div>
+  <div class="top-actions">
+    <button class="launch-btn" id="launchMytvBtn" title="启动电视 mytv">▶ 启动mytv</button>
+    <div class="status-wrap">
+      <span class="status-dot offline" id="statusDot"></span>
+      <span class="status-text" id="statusText">连接中</span>
+    </div>
+  </div>
+</div>
+
+<!-- 当前播放 -->
+<div class="now-card">
+  <div class="label">正在播放</div>
+  <div class="channel-row">
+    <div class="ch-name" id="nowName">--</div>
+    <div class="ch-no" id="nowNo">--</div>
+  </div>
+  <div class="program" id="nowProgram">等待电视连接...</div>
+</div>
+
+<!-- Tab 内容 -->
+<div class="tab-content">
+  <!-- 常用 -->
+  <div class="tab-page active" id="tab-fav">
+    <div class="section-title">常用频道</div>
+    <div class="fav-grid" id="favGrid"></div>
+    <div class="empty-fav" id="emptyFav" style="display:none">
+      <div class="icon">⭐</div>
+      <div>还没有收藏频道</div>
+      <div style="font-size:12px;margin-top:6px">去"全部"频道里收藏常用的吧</div>
+    </div>
+  </div>
+
+  <!-- 全部 -->
+  <div class="tab-page" id="tab-all">
+    <div class="search-box">
+      <span class="si">🔍</span>
+      <input type="text" id="searchInput" placeholder="搜索频道" autocomplete="off">
+    </div>
+    <div id="allList"></div>
+  </div>
+
+  <!-- 节目单 -->
+  <div class="tab-page" id="tab-epg">
+    <div class="epg-layout">
+      <div class="epg-channels" id="epgChannels"></div>
+      <div class="epg-programs" id="epgPrograms">
+        <div class="epg-empty">选择左侧频道查看节目单</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 语音麦克风悬浮按钮 -->
+<button class="mic-fab" id="micBtn" title="长按语音换台">
+  <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+</button>
+<div class="mic-hint" id="micHint">长按说话换台</div>
+
+<!-- 底部导航 -->
+<div class="bottom-nav">
+  <div class="nav-item active" data-tab="fav">
+    <div class="ni-icon">⭐</div>
+    <div class="ni-label">常用</div>
+  </div>
+  <div class="nav-item" data-tab="all">
+    <div class="ni-icon">📋</div>
+    <div class="ni-label">全部</div>
+  </div>
+  <div class="nav-item" data-tab="epg">
+    <div class="ni-icon">📺</div>
+    <div class="ni-label">节目单</div>
+  </div>
+</div>
+
+<!-- 语音识别覆盖层 -->
+<div class="voice-overlay" id="voiceOverlay">
+  <div class="voice-wave"><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="voice-text" id="voiceText">正在聆听...</div>
+  <div class="voice-hint-text">说出频道名，如"湖南卫视"、"中央一台"</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let allChannels = [];
+let currentChannel = null;
+let favChannels = JSON.parse(localStorage.getItem('favChannels') || '[]');
+let currentTab = 'fav';
+let epgSelectedChannel = null;
+let recognition = null;
+let isListening = false;
+
+// ===== Toast =====
+function showToast(msg, type = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== API =====
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    ...options
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// 一键启动电视 mytv
+async function launchMytv() {
+  const btn = $('launchMytvBtn');
+  btn.classList.add('loading');
+  btn.textContent = '启动中...';
+  try {
+    const res = await api('/api/launch_app', {
+      method: 'POST',
+      body: JSON.stringify({
+        package: 'com.tvcam.mytv',
+        activity: 'com.tvcam.mytv.activities.LeanbackActivity',
+        request_id: 'pwa-launch-' + Date.now()
+      })
+    });
+    if (res.ok) {
+      showToast('mytv 已启动', 'success');
+      setTimeout(pollCurrent, 3000);
+    } else {
+      showToast(res.message || res.error || '启动失败', 'error');
+    }
+  } catch (e) {
+    showToast('启动失败: ' + e.message, 'error');
+  } finally {
+    btn.classList.remove('loading');
+    btn.textContent = '▶ 启动mytv';
+  }
+}
+
+async function zapChannel(name) {
+  showToast('切换到 ' + name);
+  try {
+    const res = await api('/api/zap', {
+      method: 'POST',
+      body: JSON.stringify({ channel: name, request_id: 'pwa-' + Date.now() })
+    });
+    if (res.ok) {
+      showToast('已切换到 ' + res.channel, 'success');
+      currentChannel = { name: res.channel, no: res.channel_no };
+      updateNowCard();
+      renderAll();
+      setTimeout(pollCurrent, 2000);
+    } else {
+      showToast(res.message || res.error || '换台失败', 'error');
+    }
+  } catch (e) {
+    showToast('换台失败: ' + e.message, 'error');
+  }
+}
+
+// ===== 状态轮询 =====
+async function pollCurrent() {
+  try {
+    const data = await api('/api/current');
+    if (data.channel) {
+      currentChannel = data.channel;
+      updateNowCard();
+      renderAll();
+    }
+    updateStatus(true);
+  } catch (e) {
+    updateStatus(false);
+  }
+}
+
+function updateStatus(online) {
+  $('statusDot').className = 'status-dot ' + (online ? 'online' : 'offline');
+  $('statusText').textContent = online ? '已连接' : '未连接';
+  if (!online) {
+    $('nowProgram').textContent = '电视未连接或 mytv 未运行';
+  }
+}
+
+function updateNowCard() {
+  if (currentChannel) {
+    $('nowName').textContent = currentChannel.name;
+    $('nowNo').textContent = '第' + currentChannel.no + '台';
+    $('nowProgram').textContent = currentChannel.program || '节目单加载中...';
+  }
+}
+
+// ===== 频道数据加载 =====
+async function loadChannels() {
+  try {
+    const data = await api('/api/channels');
+    allChannels = data.channels || [];
+    renderAll();
+    updateStatus(true);
+  } catch (e) {
+    updateStatus(false);
+  }
+}
+
+// ===== 台标生成（文字缩写） =====
+function makeLogo(name) {
+  // 提取关键缩写
+  let abbr = name;
+  const cctvMatch = name.match(/CCTV[-]?(\d+)/i);
+  if (cctvMatch) return cctvMatch[1];
+  if (name.includes('中央')) return name.replace('中央', '').replace('台', '').substring(0, 2);
+  if (name.includes('卫视')) return name.replace('卫视', '').substring(0, 2);
+  return name.substring(0, 2);
+}
+
+// ===== 渲染：常用 =====
+function renderFav() {
+  const grid = $('favGrid');
+  const empty = $('emptyFav');
+  let favList = allChannels.filter(c => favChannels.includes(c.name));
+  // 如果没有收藏，显示前6个作为推荐
+  if (favList.length === 0) {
+    favList = allChannels.slice(0, 6);
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+  }
+  grid.innerHTML = favList.map(c => {
+    const isPlaying = currentChannel && currentChannel.name === c.name;
+    return `<div class="ch-card ${isPlaying ? 'playing' : ''}" data-name="${c.name}">
+      <div class="ch-logo">${makeLogo(c.name)}</div>
+      <div class="ch-card-name">${c.name}</div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('.ch-card').forEach(el => {
+    el.addEventListener('click', () => zapChannel(el.dataset.name));
+  });
+}
+
+// ===== 渲染：全部 =====
+function renderAllList() {
+  const q = $('searchInput').value.trim();
+  let list = allChannels;
+  if (q) list = list.filter(c => c.name.toLowerCase().includes(q.toLowerCase()));
+  $('allList').innerHTML = list.map(c => {
+    const isPlaying = currentChannel && currentChannel.name === c.name;
+    const isFav = favChannels.includes(c.name);
+    return `<div class="ch-list-item ${isPlaying ? 'playing' : ''}" data-name="${c.name}">
+      <div class="ch-list-no">${c.no}</div>
+      <div class="ch-list-name">${c.name}</div>
+      <div class="ch-list-fav ${isFav ? 'faved' : ''}" data-fav="${c.name}">${isFav ? '★' : '☆'}</div>
+    </div>`;
+  }).join('');
+  $('allList').querySelectorAll('.ch-list-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('ch-list-fav')) return;
+      zapChannel(el.dataset.name);
+    });
+  });
+  $('allList').querySelectorAll('.ch-list-fav').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFav(el.dataset.fav);
+    });
+  });
+}
+
+function toggleFav(name) {
+  const idx = favChannels.indexOf(name);
+  if (idx >= 0) {
+    favChannels.splice(idx, 1);
+    showToast('已取消收藏');
+  } else {
+    favChannels.push(name);
+    showToast('已收藏', 'success');
+  }
+  localStorage.setItem('favChannels', JSON.stringify(favChannels));
+  renderAll();
+}
+
+// ===== 渲染：节目单 =====
+function renderEpgChannels() {
+  $('epgChannels').innerHTML = allChannels.slice(0, 30).map(c => {
+    const active = epgSelectedChannel === c.name;
+    return `<div class="epg-ch-item ${active ? 'active' : ''}" data-name="${c.name}">
+      <div class="n">${c.name}</div>
+    </div>`;
+  }).join('');
+  $('epgChannels').querySelectorAll('.epg-ch-item').forEach(el => {
+    el.addEventListener('click', () => selectEpgChannel(el.dataset.name));
+  });
+}
+
+async function selectEpgChannel(name) {
+  epgSelectedChannel = name;
+  renderEpgChannels();
+  // 从 EPG API 获取真实节目单
+  $('epgPrograms').innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;padding:0 4px">${name} · 今日节目单</div><div class="epg-empty">加载中...</div>`;
+  try {
+    const data = await api('/api/epg?channel=' + encodeURIComponent(name));
+    const programs = data.programs || [];
+    const now = new Date();
+    const nowTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    if (programs.length === 0) {
+      $('epgPrograms').innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;padding:0 4px">${name} · 今日节目单</div><div class="epg-empty">暂无节目单数据</div>`;
+      return;
+    }
+    $('epgPrograms').innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;padding:0 4px">${name} · 今日节目单</div>` +
+      programs.map(p => {
+        const isCurrent = nowTime >= p.start && nowTime < p.stop;
+        return `<div class="epg-prog-item ${isCurrent ? 'current' : ''}" data-name="${name}">
+          <div class="epg-time">${p.start}</div>
+          <div class="epg-prog-info">
+            <div class="epg-prog-name">${p.title}${isCurrent ? ' · 正在播放' : ''}</div>
+            <div class="epg-prog-desc">${p.desc || '点击切换到此频道'}</div>
+          </div>
+        </div>`;
+      }).join('');
+    $('epgPrograms').querySelectorAll('.epg-prog-item').forEach(el => {
+      el.addEventListener('click', () => zapChannel(el.dataset.name));
+    });
+  } catch (e) {
+    $('epgPrograms').innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;padding:0 4px">${name} · 今日节目单</div><div class="epg-empty">节目单加载失败</div>`;
+  }
+}
+
+// ===== 统一渲染 =====
+function renderAll() {
+  renderFav();
+  renderAllList();
+  if (currentTab === 'epg') renderEpgChannels();
+}
+
+// ===== Tab 切换 =====
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+    currentTab = item.dataset.tab;
+    $('tab-' + currentTab).classList.add('active');
+    if (currentTab === 'epg') {
+      if (!epgSelectedChannel && allChannels.length > 0) {
+        selectEpgChannel(allChannels[0].name);
+      } else {
+        renderEpgChannels();
+      }
+    }
+  });
+});
+
+$('searchInput').addEventListener('input', renderAllList);
+
+// ===== 语音换台 =====
+// 每次 startListening 都创建新的 recognition 对象，避免 Web Speech API 复用后状态卡住
+const SR_CTOR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let voiceSupported = !!SR_CTOR;
+
+function createRecognition() {
+  if (!SR_CTOR) return null;
+  const rec = new SR_CTOR();
+  rec.lang = 'zh-CN';
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = (event) => {
+    let transcript = '';
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    $('voiceText').textContent = transcript || '正在聆听...';
+    if (event.results[event.results.length - 1].isFinal) {
+      const cleaned = cleanVoiceCommand(transcript);
+      console.log('[Voice] final:', transcript, '-> cleaned:', cleaned);
+      if (cleaned) {
+        isListening = false;
+        $('micBtn').classList.remove('listening');
+        $('voiceOverlay').classList.remove('show');
+        try { rec.stop(); } catch (e) {}
+        zapChannel(cleaned);
+      } else {
+        $('voiceText').textContent = '未识别到频道名，请重试';
+        setTimeout(() => { $('voiceOverlay').classList.remove('show'); }, 1500);
+      }
+    }
+  };
+
+  rec.onerror = (event) => {
+    console.log('[Voice] error:', event.error);
+    if (event.error === 'aborted' || event.error === 'no-speech') {
+      // no-speech 时静默结束，不显示错误
+      isListening = false;
+      $('micBtn').classList.remove('listening');
+      $('voiceOverlay').classList.remove('show');
+      return;
+    }
+    if (event.error === 'not-allowed') {
+      $('voiceText').textContent = '请允许麦克风权限';
+    } else if (event.error === 'network') {
+      $('voiceText').textContent = '网络错误，语音识别不可用';
+    } else {
+      $('voiceText').textContent = '识别失败(' + event.error + ')，请重试';
+    }
+    isListening = false;
+    $('micBtn').classList.remove('listening');
+    setTimeout(() => { $('voiceOverlay').classList.remove('show'); }, 1500);
+  };
+
+  rec.onend = () => {
+    if (isListening) {
+      isListening = false;
+      $('micBtn').classList.remove('listening');
+      $('voiceOverlay').classList.remove('show');
+    }
+  };
+
+  return rec;
+}
+
+function cleanVoiceCommand(text) {
+  let t = text.trim();
+  // 去除常见前缀（保留"台"字，因为频道名本身如"中央二台"）
+  t = t.replace(/^(换台到|我要看|播放|打开|切换到|调到|我想看|我要听|换到|看|转|请)/, '');
+  // 去除常见后缀（只去"频道"、"电视台"，不去单独的"台"）
+  t = t.replace(/(频道|电视台|吧|呢|啊|呀|哦|啦|谢谢)$/, '');
+  return t.trim();
+}
+
+function startListening() {
+  if (!voiceSupported) {
+    // 不支持语音识别，降级为文本输入
+    const ch = prompt('请输入频道名：');
+    if (ch) zapChannel(ch.trim());
+    return;
+  }
+  if (isListening) return; // 已经在聆听，忽略重复触发
+
+  const rec = createRecognition();
+  if (!rec) return;
+  recognition = rec; // 保存引用供 stopListening 使用
+
+  try {
+    isListening = true;
+    $('micBtn').classList.add('listening');
+    $('voiceOverlay').classList.add('show');
+    $('voiceText').textContent = '正在聆听...';
+    rec.start();
+  } catch (e) {
+    console.log('[Voice] start error:', e);
+    isListening = false;
+    $('micBtn').classList.remove('listening');
+    $('voiceOverlay').classList.remove('show');
+    $('voiceText').textContent = '语音启动失败，请重试';
+    setTimeout(() => { $('voiceOverlay').classList.remove('show'); }, 1500);
+  }
+}
+
+function stopListening() {
+  isListening = false;
+  $('micBtn').classList.remove('listening');
+  $('voiceOverlay').classList.remove('show');
+  if (recognition) {
+    try { recognition.stop(); } catch (e) {}
+  }
+}
+
+// 麦克风按钮：长按开始，松开结束
+const micBtn = $('micBtn');
+let pressTimer = null;
+let longPressTriggered = false;
+
+micBtn.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  longPressTriggered = false;
+  pressTimer = setTimeout(() => {
+    longPressTriggered = true;
+    startListening();
+  }, 300);
+});
+
+micBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  clearTimeout(pressTimer);
+  if (longPressTriggered) {
+    if (isListening) {
+      // 松开时如果还在识别，停止识别（最终结果会在 onresult 中处理）
+      if (recognition) {
+        try { recognition.stop(); } catch (e) {}
+      }
+    }
+  } else {
+    // 短按：也启动语音（降低操作门槛）
+    startListening();
+  }
+});
+
+micBtn.addEventListener('mousedown', (e) => {
+  longPressTriggered = false;
+  pressTimer = setTimeout(() => {
+    longPressTriggered = true;
+    startListening();
+  }, 300);
+});
+
+micBtn.addEventListener('mouseup', (e) => {
+  clearTimeout(pressTimer);
+  if (longPressTriggered && isListening && recognition) {
+    try { recognition.stop(); } catch (e) {}
+  } else if (!longPressTriggered) {
+    startListening();
+  }
+});
+
+// 麦克风提示
+micBtn.addEventListener('mouseenter', () => $('micHint').classList.add('show'));
+micBtn.addEventListener('mouseleave', () => $('micHint').classList.remove('show'));
+setTimeout(() => { $('micHint').classList.add('show'); setTimeout(() => $('micHint').classList.remove('show'), 3000); }, 1000);
+
+// ===== Service Worker 注册 =====
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/remote-static/sw.js').catch(e => console.log('SW reg failed:', e));
+}
+
+// ===== 初始化 =====
+$('launchMytvBtn').addEventListener('click', launchMytv);
+loadChannels();
+pollCurrent();
+setInterval(pollCurrent, 5000);
+</script>
+
+</body>
+</html>

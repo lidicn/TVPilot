@@ -1,0 +1,853 @@
+TVPilot MCP Server 设计文档
+===========================
+
+基于需求稿《TVPilot-MCP-Server.md》(2026-09-24) 输出。
+目标仓：E:/NAS/TVPilot（只读参考）
+产出：tvpilot/mcp.py + tests/test_mcp.py
+本文档：设计 + 关键代码，不含完整实现。
+
+
+1. 总体架构
+===========
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                     MCP Client (Agent)                       │
+    │            ┌──────────────────────────────────┐              │
+    │            │  HTTP/SSE (POST /mcp)             │              │
+    │            │  Stdio (python -m tvpilot.mcp     │              │
+    │            │         --stdio)                 │              │
+    │            └──────────┬───────────────────────┘              │
+    └───────────────────────┼──────────────────────────────────────┘
+                            │  JSON-RPC 2.0
+                            ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │                    tvpilot/mcp.py (新增)                      │
+    │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
+    │  │ JSON-RPC    │  │ Tool         │  │ Transport Layer       │ │
+    │  │ Dispatcher  │──│ Registry     │──│ HTTP Server + SSE     │ │
+    │  │             │  │ (10 tools)   │  │ Stdio loop            │ │
+    │  └─────────────┘  └──────┬───────┘  └──────────────────────┘ │
+    │                           │ import                            │
+    └───────────────────────────┼────────────────────────────────────┘
+                                │
+                    ┌───────────┼───────────┐
+                    ▼           ▼           ▼
+              tvpilot/      tvpilot/    tvpilot/
+              tools.py      state.py    screenshot.py  blueprint.py
+              (只读复用)    (只读复用)   (只读复用)    (只读复用)
+
+
+2. 工具清单（10 个）
+====================
+
+每个工具 description ≤ 80 字符，返回只含关键字段。
+
+  ID              描述                                底层调用
+  ─────────────  ──────────────────────────────────  ──────────────────────────────
+  tv_foreground  Get current foreground package       tools.tool_foreground
+  tv_screenshot  Capture screen, return JPEG URL      screenshot.tool_screenshot
+                 (default 240p, 480p option)
+  tv_zap         Change TV channel by name            tools.tool_zap
+  tv_keyevent    Send Android keyevent (KEYCODE_*)    tools.tool_keyevent
+  tv_tap         Tap screen at x,y coordinates        tools.tool_tap
+  tv_input_text  Input text (supports Chinese)        tools.tool_input_text
+  tv_launch_app  Launch app by package name           tools.tool_launch_app
+  tv_go_home     Go to home screen                    tools.tool_combo_go_home
+  tv_system_state Get system state (battery/net/etc)  state.tool_system_state
+  tv_blueprint_run Run named blueprint flow           blueprint.BlueprintRunner.run
+
+
+3. 关键代码片段
+===============
+
+3.1 模块骨架与导入
+-----------------
+
+    """TVPilot MCP Server.
+
+    MCP 2025-03-26 compliant server exposing TVPilot tools.
+    Transports: HTTP/SSE (POST /mcp), stdio (python -m tvpilot.mcp --stdio).
+    Zero new dependencies: stdlib only (json, http.server, urllib, threading, subprocess).
+    """
+    from __future__ import annotations
+
+    import json
+    import os
+    import re
+    import sys
+    import time
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from urllib.parse import urlparse
+
+    # tvpilot 内部模块（只读 import，不修改）
+    from tvpilot.tools import (
+        tool_zap, tool_keyevent, tool_launch_app,
+        tool_input_text, tool_tap, tool_combo_go_home,
+    )
+    from tvpilot.state import get_foreground_pkg, tool_system_state
+    from tvpilot.screenshot import tool_screenshot
+    from tvpilot.blueprint import BlueprintRunner
+
+
+3.2 工具注册表
+--------------
+
+    class MCPTool:
+        """MCP 工具定义：name / description / inputSchema / handler."""
+        __slots__ = ('name', 'description', 'input_schema', 'handler')
+
+        def __init__(self, name: str, description: str,
+                     input_schema: Dict[str, Any], handler: Callable) -> None:
+            assert len(description) <= 80, f'description too long for {name}'
+            self.name = name
+            self.description = description
+            self.input_schema = input_schema
+            self.handler = handler
+
+    def build_tool_registry() -> List[MCPTool]:
+        """构建 10 个工具的注册表（description 均 ≤ 80 字符）。"""
+        tools = []
+
+        # 1) tv_foreground
+        tools.append(MCPTool(
+            name='tv_foreground',
+            description='Get current foreground package',
+            input_schema={
+                'type': 'object',
+                'properties': {},
+            },
+            handler=_tool_foreground,
+        ))
+
+        # 2) tv_screenshot
+        tools.append(MCPTool(
+            name='tv_screenshot',
+            description='Capture screen, return JPEG URL (default 240p)',
+            input_schema={
+                'type': 'object',
+                'properties': {
+                    'quality': {
+                        'type': 'string',
+                        'enum': ['240p', '480p'],
+                        'description': 'Resolution preset',
+                    },
+                },
+            },
+            handler=_tool_screenshot,
+        ))
+
+        # 3) tv_zap
+        tools.append(MCPTool(
+            name='tv_zap',
+            description='Change TV channel by name',
+            input_schema={
+                'type': 'object',
+                'required': ['channel'],
+                'properties': {
+                    'channel': {
+                        'type': 'string',
+                        'description': 'Channel name or number',
+                    },
+                },
+            },
+            handler=_tool_zap,
+        ))
+
+        # 4) tv_keyevent
+        tools.append(MCPTool(
+            name='tv_keyevent',
+            description='Send Android keyevent (KEYCODE_*)',
+            input_schema={
+                'type': 'object',
+                'required': ['key'],
+                'properties': {
+                    'key': {
+                        'type': 'string',
+                        'description': 'Keycode, e.g. KEYCODE_DPAD_UP',
+                    },
+                },
+            },
+            handler=_tool_keyevent,
+        ))
+
+        # 5) tv_tap
+        tools.append(MCPTool(
+            name='tv_tap',
+            description='Tap screen at x,y coordinates',
+            input_schema={
+                'type': 'object',
+                'required': ['x', 'y'],
+                'properties': {
+                    'x': {'type': 'integer', 'minimum': 0, 'maximum': 4096},
+                    'y': {'type': 'integer', 'minimum': 0, 'maximum': 4096},
+                },
+            },
+            handler=_tool_tap,
+        ))
+
+        # 6) tv_input_text
+        tools.append(MCPTool(
+            name='tv_input_text',
+            description='Input text (supports Chinese)',
+            input_schema={
+                'type': 'object',
+                'required': ['text'],
+                'properties': {
+                    'text': {
+                        'type': 'string',
+                        'description': 'Text to input',
+                    },
+                },
+            },
+            handler=_tool_input_text,
+        ))
+
+        # 7) tv_launch_app
+        tools.append(MCPTool(
+            name='tv_launch_app',
+            description='Launch app by package name',
+            input_schema={
+                'type': 'object',
+                'required': ['package'],
+                'properties': {
+                    'package': {
+                        'type': 'string',
+                        'description': 'Package name',
+                    },
+                    'activity': {
+                        'type': 'string',
+                        'description': 'Activity (optional)',
+                    },
+                },
+            },
+            handler=_tool_launch_app,
+        ))
+
+        # 8) tv_go_home
+        tools.append(MCPTool(
+            name='tv_go_home',
+            description='Go to home screen',
+            input_schema={
+                'type': 'object',
+                'properties': {},
+            },
+            handler=_tool_go_home,
+        ))
+
+        # 9) tv_system_state
+        tools.append(MCPTool(
+            name='tv_system_state',
+            description='Get system state (battery/net/etc)',
+            input_schema={
+                'type': 'object',
+                'properties': {},
+            },
+            handler=_tool_system_state,
+        ))
+
+        # 10) tv_blueprint_run
+        tools.append(MCPTool(
+            name='tv_blueprint_run',
+            description='Run named blueprint flow',
+            input_schema={
+                'type': 'object',
+                'required': ['name'],
+                'properties': {
+                    'name': {
+                        'type': 'string',
+                        'description': 'Blueprint name',
+                    },
+                    'params': {
+                        'type': 'object',
+                        'description': 'Blueprint parameters',
+                    },
+                },
+            },
+            handler=_tool_blueprint_run,
+        ))
+
+        return tools
+
+
+3.3 工具 handler（关键实现）
+----------------------------
+
+    # ---------- 返回值归一化 ----------
+    # 现有工具返回三元组 (data, err_code, err_msg)；
+    # MCP 要求只返回 data（无 ok/cost_ms 包装），出错时返回 isError=True。
+
+    def _normalize(result: Tuple) -> Tuple[Any, Optional[str]]:
+        """把三元组归一化为 (data, error_message)。"""
+        data, err_code, err_msg = normalize_tool_result(result)
+        if err_code is not None or err_msg is not None:
+            return None, err_msg or err_code
+        return data, None
+
+
+    # ---------- 各工具 handler ----------
+
+    def _tool_foreground(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回 {"package": "..."}"""
+        data, err = _normalize(tool_foreground())
+        if err:
+            return _error_result(err)
+        return data  # {"package": "..."}
+
+
+    def _tool_screenshot(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回 {"url": "...", "width": 426}（不返回 base64）。"""
+        quality = args.get('quality', '240p')
+        # 240p 对应 426x240（16:9 比例，标准 240p）
+        if quality == '240p':
+            width = 426
+            height = 240
+        else:
+            width = 854
+            height = 480
+
+        data, err = _normalize(tool_screenshot(width=width, height=height))
+        if err:
+            return _error_result(err)
+        # 确保只返回 url + width，不返回 base64
+        result = {}
+        if isinstance(data, dict):
+            result['url'] = data.get('url', '')
+            result['width'] = data.get('width', width)
+        return result
+
+
+    def _tool_zap(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回换台结果关键字段。"""
+        channel = args.get('channel', '')
+        data, err = _normalize(tool_zap(channel))
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_keyevent(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回按键结果。"""
+        key = args.get('key', '')
+        data, err = _normalize(tool_keyevent(key))
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_tap(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回点击结果。"""
+        x = args.get('x', 0)
+        y = args.get('y', 0)
+        data, err = _normalize(tool_tap(x, y))
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_input_text(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回输入结果。"""
+        text = args.get('text', '')
+        data, err = _normalize(tool_input_text(text))
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_launch_app(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回启动 App 结果。"""
+        package = args.get('package', '')
+        activity = args.get('activity')
+        data, err = _normalize(tool_launch_app(package, activity))
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_go_home(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回回桌面结果。"""
+        data, err = _normalize(tool_combo_go_home())
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_system_state(args: Dict[str, Any]) -> Dict[str, Any]:
+        """返回系统状态。"""
+        data, err = _normalize(tool_system_state())
+        if err:
+            return _error_result(err)
+        return data
+
+
+    def _tool_blueprint_run(args: Dict[str, Any]) -> Dict[str, Any]:
+        """调用 BlueprintRunner 执行蓝图，返回汇总结果。"""
+        name = args.get('name', '')
+        params = args.get('params', {})
+        runner = BlueprintRunner()
+        runner.register_builtins()
+        result = runner.run(name, params)
+        # BlueprintResult 有 to_dict() 方法
+        if hasattr(result, 'to_dict'):
+            d = result.to_dict()
+            # 精简返回：只保留关键字段
+            return {
+                'name': d.get('name'),
+                'ok': d.get('ok'),
+                'error': d.get('error'),
+                'steps': [
+                    {
+                        'step': s.get('step'),
+                        'ok': s.get('ok'),
+                        'error': s.get('error'),
+                    }
+                    for s in d.get('steps', [])
+                ],
+            }
+        return result
+
+
+3.4 JSON-RPC 2.0 Dispatcher
+---------------------------
+
+    MCP_PROTOCOL_VERSION = '2025-03-26'
+
+
+    class JsonRpcError:
+        """JSON-RPC 2.0 错误码。"""
+        PARSE_ERROR = -32700
+        INVALID_REQUEST = -32600
+        METHOD_NOT_FOUND = -32601
+        INVALID_PARAMS = -32602
+        INTERNAL_ERROR = -32603
+
+
+    def _error_result(msg: str) -> Dict[str, Any]:
+        """构造工具调用错误响应（isError=True）。"""
+        return {'isError': True, 'error': msg}
+
+
+    def _jsonrpc_error(code: int, msg: str) -> Dict[str, Any]:
+        """构造 JSON-RPC 错误响应。"""
+        return {
+            'jsonrpc': '2.0',
+            'error': {'code': code, 'message': msg},
+        }
+
+
+    def handle_request(body: bytes, tools: List[MCPTool]) -> Dict[str, Any]:
+        """处理 JSON-RPC 2.0 请求，返回响应 dict。"""
+        try:
+            req = json.loads(body)
+        except json.JSONDecodeError as e:
+            return _jsonrpc_error(JsonRpcError.PARSE_ERROR, str(e))
+
+        if not isinstance(req, dict):
+            return _jsonrpc_error(JsonRpcError.INVALID_REQUEST, 'Request must be a JSON object')
+
+        method = req.get('method')
+        req_id = req.get('id')
+        params = req.get('params', {})
+
+        if method is None:
+            return _jsonrpc_error(JsonRpcError.INVALID_REQUEST, 'Missing method')
+
+        # ---- 方法分发 ----
+
+        if method == 'initialize':
+            result = {
+                'protocolVersion': MCP_PROTOCOL_VERSION,
+                'capabilities': {
+                    'tools': True,
+                },
+                'serverInfo': {
+                    'name': 'tvpilot-mcp',
+                    'version': '0.1.0',
+                },
+            }
+            return {'jsonrpc': '2.0', 'id': req_id, 'result': result}
+
+        elif method == 'tools/list':
+            tool_list = []
+            for t in tools:
+                tool_list.append({
+                    'name': t.name,
+                    'description': t.description,
+                    'inputSchema': t.input_schema,
+                })
+            return {'jsonrpc': '2.0', 'id': req_id, 'result': {'tools': tool_list}}
+
+        elif method == 'tools/call':
+            tool_name = params.get('name', '')
+            tool_args = params.get('arguments', {})
+
+            tool_map = {t.name: t for t in tools}
+            tool = tool_map.get(tool_name)
+            if tool is None:
+                return _jsonrpc_error(
+                    JsonRpcError.INVALID_PARAMS,
+                    f'Unknown tool: {tool_name}')
+
+            try:
+                data = tool.handler(tool_args)
+            except Exception as exc:
+                return _jsonrpc_error(
+                    JsonRpcError.INTERNAL_ERROR,
+                    f'{type(exc).__name__}: {exc}')
+
+            # 检查是否为工具层错误
+            if isinstance(data, dict) and data.get('isError'):
+                return {
+                    'jsonrpc': '2.0',
+                    'id': req_id,
+                    'result': {
+                        'content': [{'type': 'text', 'text': json.dumps(
+                            {'error': data.get('error', data.get('message', '')))},
+                            ensure_ascii=False)}],
+                        'isError': True,
+                    },
+                }
+
+            # 正常返回
+            return {
+                'jsonrpc': '2.0',
+                'id': req_id,
+                'result': {
+                    'content': [{'type': 'text', 'text': json.dumps(
+                        data, ensure_ascii=False, default=str)}],
+                },
+            }
+
+        else:
+            return _jsonrpc_error(
+                JsonRpcError.METHOD_NOT_FOUND,
+                f'Method not found: {method}')
+
+
+3.5 HTTP/SSE Transport（POST /mcp）
+-----------------------------------
+
+    class MCPHTTPHandler(BaseHTTPRequestHandler):
+        """HTTP handler for MCP JSON-RPC requests."""
+        tools: List[MCPTool] = []
+
+        def do_POST(self) -> None:
+            if urlparse(self.path).path != '/mcp':
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+
+            resp = handle_request(body, self.tools)
+            resp_bytes = json.dumps(resp, ensure_ascii=False).encode('utf-8')
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(resp_bytes)))
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass  # 静默日志，避免污染 stdio 输出
+
+    def run_http_server(host: str = '0.0.0.0', port: int = 8765) -> None:
+        """启动 HTTP/SSE MCP 服务器。"""
+        tools = build_tool_registry()
+        MCPHTTPHandler.tools = tools
+        server = ThreadingHTTPServer((host, port), MCPHTTPHandler)
+        print(f'MCP HTTP Server listening on http://{host}:{port}/mcp')
+        server.serve_forever()
+
+
+3.6 Stdio Transport
+-------------------
+
+    def run_stdio() -> None:
+        """stdio 模式：从 stdin 读 JSON-RPC 请求，写 stdout 响应。
+
+        每行一条 JSON-RPC 消息（MCP stdio 约定）。
+        """
+        tools = build_tool_registry()
+
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                req = json.loads(line)
+            except json.JSONDecodeError:
+                resp = _jsonrpc_error(JsonRpcError.PARSE_ERROR, 'Invalid JSON')
+                sys.stdout.write(json.dumps(resp, ensure_ascii=False) + '\n')
+                sys.stdout.flush()
+                continue
+
+            # 处理请求
+            body = json.dumps(req).encode('utf-8')
+            resp = handle_request(body, tools)
+
+            # 写响应
+            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + '\n')
+            sys.stdout.flush()
+
+
+3.7 入口函数（__main__）
+------------------------
+
+    def main() -> None:
+        """CLI 入口：python -m tvpilot.mcp --stdio 或 python -m tvpilot.mcp --http。"""
+        if '--stdio' in sys.argv:
+            run_stdio()
+        elif '--http' in sys.argv:
+            port = 8765
+            for i, arg in enumerate(sys.argv):
+                if arg == '--port' and i + 1 < len(sys.argv):
+                    port = int(sys.argv[i + 1])
+            run_http_server(port=port)
+        else:
+            print('Usage: python -m tvpilot.mcp --stdio | --http [--port PORT]')
+            sys.exit(1)
+
+
+    if __name__ == '__main__':
+        main()
+
+
+4. 设计决策记录
+===============
+
+4.1 数据结构与索引选择
+----------------------
+- 工具注册表使用 List[MCPTool]（有序列表），分发时用 dict 映射加速查找。
+- 原因：MCP 协议要求 tools/list 返回有序列表；内部分发用 dict 保证 O(1) 查找。
+- 每个 MCPTool 有 4 个字段（name/description/input_schema/handler），用 __slots__ 减少内存。
+
+4.2 失败/降级语义
+-----------------
+- 所有工具 handler 一律 fail-closed：出错返回 isError=True 而非抛异常。
+- 原因：MCP 客户端需要能处理工具错误而不崩溃；抛异常会导致 JSON-RPC 层返回 INTERNAL_ERROR，
+  客户端无法区分"电视离线"和"服务器 bug"。
+- JSON-RPC 层只在以下情况返回 error：请求解析失败、方法不存在、参数非法。
+  工具调用失败返回 isError=True 的 result（MCP 工具调用语义）。
+
+4.3 与 §1 现有实现的兼容边界
+-----------------------------
+- 所有工具 handler 通过 import 调用现有函数，不复制不修改任何代码。
+- 返回值归一化：现有工具返回 (data, err_code, err_msg) 三元组，MCP 层只取 data；
+  err_code/err_msg 非 None 时转换为 isError=True。
+- 截图工具：默认 240p（426x240），可选 480p（854x480），始终返回 URL 不返回 base64。
+  原因：LLM token 节省（base64 一张 480p JPEG ≈ 50KB ≈ 12.5K tokens）。
+
+4.4 需求中说不清的地方
+----------------------
+- screenshot.tool_screenshot 的确切参数签名未在需求稿中给出。本设计假设它接受
+  width/height 关键字参数并返回 ({"url":..., "width":...}, None, None) 三元组。
+  落地前需确认实际签名。
+- BlueprintRunner 是否需要初始化时传入参数（如 tools 表、sleep 函数）。本设计假设
+  无参构造 + register_builtins() 即可使用。
+- state.tool_system_state 的确切返回字段未明确。本设计透传其返回值。
+- HTTP 端口默认 8765，需求稿未指定端口号。
+
+5. 测试设计
+===========
+
+5.1 测试策略
+------------
+- 使用 unittest.mock 打桩所有 tvpilot 内部函数，避免真机依赖。
+- JSON-RPC 请求通过 handle_request() 直接调用（不启动 HTTP 服务器）。
+- stdio 模式通过 subprocess 调用 python -m tvpilot.mcp --stdio 测试。
+
+5.2 关键测试用例
+----------------
+    # tests/test_mcp.py
+
+    # T1: initialize 握手
+    def test_initialize():
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 1,
+            'method': 'initialize',
+            'params': {},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        assert resp['result']['protocolVersion'] == '2025-03-26'
+        assert resp['result']['capabilities']['tools'] is True
+
+    # T2: tools/list 返回 ≤10 个工具，description ≤ 80 字符
+    def test_tools_list():
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 2,
+            'method': 'tools/list',
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        tools = resp['result']['tools']
+        assert len(tools) <= 10
+        for t in tools:
+            assert len(t['description']) <= 80, f"{t['name']}: {len(t['description'])} chars"
+
+    # T3: tv_foreground 返回 {"package": "..."}（无 ok/cost_ms 包装）
+    @mock.patch('tvpilot.mcp.tool_foreground')
+    def test_tv_foreground(mock_fg):
+        mock_fg.return_value = ({'package': 'com.android.launcher'}, None, None)
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 3,
+            'method': 'tools/call',
+            'params': {'name': 'tv_foreground', 'arguments': {}},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        result = json.loads(resp['result']['content'][0]['text'])
+        assert 'package' in result
+        assert 'ok' not in result
+        assert 'cost_ms' not in result
+
+    # T4: tv_screenshot 返回 {"url": "...", "width": 426}（无 base64）
+    @mock.patch('tvpilot.mcp.tool_screenshot')
+    def test_tv_screenshot(mock_ss):
+        mock_ss.return_value = ({'url': 'http://host/snap.jpg', 'width': 426,
+                                  'height': 240, 'base64': 'abc'}, None, None)
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 4,
+            'method': 'tools/call',
+            'params': {'name': 'tv_screenshot', 'arguments': {}},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        result = json.loads(resp['result']['content'][0]['text'])
+        assert 'url' in result
+        assert result['width'] == 426
+        assert 'base64' not in result
+
+    # T5: tv_zap 正确调用 tool_zap
+    @mock.patch('tvpilot.mcp.tool_zap')
+    def test_tv_zap(mock_zap):
+        mock_zap.return_value = ({'channel': 'CCTV1', 'channel_no': '1'}, None, None)
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 5,
+            'method': 'tools/call',
+            'params': {'name': 'tv_zap', 'arguments': {'channel': 'CCTV1'}},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        result = json.loads(resp['result']['content'][0]['text'])
+        assert result['channel'] == 'CCTV1'
+        mock_zap.assert_called_once_with('CCTV1')
+
+    # T6: tv_blueprint_run 正确调用 BlueprintRunner
+    @mock.patch('tvpilot.mcp.BlueprintRunner')
+    def test_tv_blueprint_run(mock_runner):
+        mock_instance = mock.Mock()
+        mock_result = mock.Mock()
+        mock_result.to_dict.return_value = {
+            'name': 'go_home', 'ok': True, 'error': None,
+            'steps': [{'step': 'step_1', 'ok': True, 'error': None}],
+        }
+        mock_instance.run.return_value = mock_result
+        mock_runner.return_value = mock_instance
+
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 6,
+            'method': 'tools/call',
+            'params': {'name': 'tv_blueprint_run', 'arguments': {'name': 'go_home'}},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        result = json.loads(resp['result']['content'][0]['text'])
+        assert result['name'] == 'go_home'
+        assert result['ok'] is True
+        mock_instance.run.assert_called_once_with('go_home', {})
+
+    # T7: 未知工具返回错误
+    def test_unknown_tool():
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 7,
+            'method': 'tools/call',
+            'params': {'name': 'nonexistent_tool', 'arguments': {}},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        assert 'error' in resp
+        assert resp['error']['code'] == JsonRpcError.INVALID_PARAMS
+
+    # T8: stdio 模式响应 initialize
+    def test_stdio_initialize():
+        import subprocess
+        proc = subprocess.Popen(
+            [sys.executable, '-m', 'tvpilot.mcp', '--stdio'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        req = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}})
+        proc.stdin.write(req + '\n')
+        proc.stdin.flush()
+        # 发送 EOF 关闭 stdin
+        proc.stdin.close()
+        stdout, stderr = proc.communicate(timeout=10)
+        resp = json.loads(stdout.strip().split('\n')[0])
+        assert resp['result']['protocolVersion'] == '2025-03-26'
+
+    # T9: 错误路径——工具返回错误三元组
+    @mock.patch('tvpilot.mcp.tool_zap')
+    def test_tv_zap_error(mock_zap):
+        mock_zap.return_value = (None, 'ERR_MYTV_API_ERROR', 'TV unreachable')
+        body = json.dumps({
+            'jsonrpc': '2.0', 'id': 9,
+            'method': 'tools/call',
+            'params': {'name': 'tv_zap', 'arguments': {'channel': 'CCTV1'}},
+        }).encode()
+        resp = handle_request(body, build_tool_registry())
+        assert resp['result']['isError'] is True
+        assert 'TV unreachable' in resp['result']['content'][0]['text']
+
+    # T10: JSON 解析错误
+    def test_parse_error():
+        resp = handle_request(b'not json', build_tool_registry())
+        assert resp['error']['code'] == JsonRpcError.PARSE_ERROR
+
+    # T11: 方法不存在
+    def test_method_not_found():
+        body = json.dumps({'jsonrpc': '2.0', 'id': 11, 'method': 'nonexistent'}).encode()
+        resp = handle_request(body, build_tool_registry())
+        assert resp['error']['code'] == JsonRpcError.METHOD_NOT_FOUND
+
+    # T12: 零新依赖——import 列表只有标准库 + tvpilot
+    def test_no_new_dependencies():
+        import ast
+        import importlib
+        stdlib = set(sys.stdlib_module_names)
+        allowed = stdlib | {'tvpilot', 'tvpilot.tools', 'tvpilot.state',
+                            'tvpilot.screenshot', 'tvpilot.blueprint'}
+        # 静态分析 mcp.py 的 import 列表
+        with open(__file__) as f:  # 假设测试文件可访问 mcp.py
+            tree = ast.parse(open('tvpilot/mcp.py').read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    top = alias.name.split('.')[0]
+                    assert top in allowed, f'New dependency: {top}'
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    top = node.module.split('.')[0]
+                    assert top in allowed, f'New dependency: {top}'
+
+
+6. 交付清单
+===========
+
+- tvpilot/mcp.py          核心实现（约 350 行，零新依赖）
+- tests/test_mcp.py       12 条测试用例（含边界与异常路径）
+- docs/mcp设计/6.txt      本设计文档
+
+
+附录：关键设计原则速查
+======================
+
+  原则                    做法
+  ─────────────────────  ──────────────────────────────────────────────
+  节省 LLM token         截图返回 URL 不返回 base64（省 ~12.5K tokens/张）
+                         工具 description ≤ 80 字符
+                         响应只返回关键字段，无 ok/cost_ms 包装
+                         工具数 ≤ 10 个（从 20+ API 收敛）
+  零新依赖               只用 json/http.server/urllib/threading/subprocess
+                         + tvpilot 内部模块
+  不改现有文件           通过 import 复用，不修改 tools.py/state.py/
+                         screenshot.py/blueprint.py
+  fail-closed            工具错误返回 isError=True，不抛异常
+  双传输                 HTTP/SSE (POST /mcp) + stdio (--stdio)

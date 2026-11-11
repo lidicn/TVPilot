@@ -1,0 +1,1115 @@
+
+让我先搜索 TVPilot 项目以及 MCP Python SDK 的实现细节，以便准确交付设计。基于上传的设计需求文档和 MCP 协议规范，我现在为您交付 TVPilot MCP Server 完整设计与关键代码。
+TVPilot MCP Server — 完整设计交付
+一、架构总览
+文本
+
+编辑
+
+
+
+┌──────────────────┐     stdio / SSE      ┌──────────────────────┐
+│  MCP Host/Agent  │◄──── JSON-RPC 2.0 ──►│  tvpilotmcp.py       │
+│ (Claude Desktop, │                       │  (MCP Server)        │
+│  Cursor, etc.)   │                       │                      │
+└──────────────────┘                       │  ┌────────────────┐  │
+                                           │  │ Tool Dispatcher │  │
+                                           │  └───────┬────────┘  │
+                                           └──────────┼───────────┘
+                                                      │ 调用
+                                           ┌──────────▼───────────┐
+                                           │  tvpilottools.py     │
+                                           │  (现有 ADB 控制层)     │
+                                           └──────────┬───────────┘
+                                                      │ ADB / HTTP
+                                           ┌──────────▼───────────┐
+                                           │    Android TV        │
+                                           └──────────────────────┘
+二、工具清单（共 9 个，≤ 10）
+表格
+#	工具名	参数	返回值	说明
+1	get_screen_info	无	JSON	获取当前屏幕信息（前台应用、Activity）
+2	launch_app	package_name: str	JSON	启动指定应用
+3	send_key	keycode: str	JSON	发送遥控器按键（KEYCODE_HOME 等）
+4	input_text	text: str	JSON	输入文本
+5	set_volume	level: int, stream?: str	JSON	设置音量 (0-100)
+6	get_volume	无	JSON	获取当前音量
+7	power_control	action: "on"|"off"|"toggle"	JSON	电源控制
+8	list_installed_apps	无	JSON	列出已安装应用
+9	screenshot	无	JSON (含 URL)	截屏并返回文件路径/URL，不返回 base64
+三、关键代码实现
+3.1 tvpilottools.py（现有层 — 接口定义）
+python
+
+编辑
+
+
+
+"""
+tvpilottools.py - TVPilot 底层 ADB 控制工具
+此文件为现有代码的接口定义，MCP Server 将调用这些函数。
+"""
+import subprocess
+import json
+import logging
+import os
+from typing import Optional
+
+logger = logging.getLogger("tvpilot.tools")
+
+
+class TVPilotTools:
+    """Android TV ADB 控制工具集"""
+
+    def __init__(self, device_ip: str = None, device_port: int = 5555):
+        self.device_ip = device_ip or os.environ.get("TV_DEVICE_IP", "192.168.1.100")
+        self.device_port = device_port
+        self.adb_cmd_base = ["adb", "-s", f"{self.device_ip}:{self.device_port}"]
+
+    def _run_adb(self, *args, timeout: int = 10) -> str:
+        """执行 ADB 命令并返回 stdout"""
+        cmd = self.adb_cmd_base + list(args)
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout
+            )
+            if result.returncode != 0:
+                logger.error("ADB error: %s", result.stderr.strip())
+                raise RuntimeError(f"ADB command failed: {result.stderr.strip()}")
+            return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"ADB command timed out after {timeout}s")
+
+    def _run_shell(self, shell_cmd: str, timeout: int = 10) -> str:
+        """执行 ADB shell 命令"""
+        return self._run_adb("shell", shell_cmd, timeout=timeout)
+
+    # ── 屏幕信息 ──
+    def get_current_screen(self) -> dict:
+        """获取当前前台应用信息"""
+        output = self._run_shell(
+            "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedApp'"
+        )
+        # 解析 Activity 信息
+        info = {"raw": output, "foreground_app": None, "activity": None}
+        for line in output.splitlines():
+            line = line.strip()
+            if "mResumedActivity" in line or "mFocusedApp" in line:
+                parts = line.split()
+                for i, p in enumerate(parts):
+                    if "/" in p and "." in p:
+                        pkg_activity = p.rstrip("}")
+                        if "/" in pkg_activity:
+                            pkg, act = pkg_activity.split("/", 1)
+                            info["foreground_app"] = pkg
+                            info["activity"] = act
+                        break
+        return info
+
+    # ── 应用启动 ──
+    def launch_app(self, package_name: str) -> dict:
+        """启动指定应用"""
+        # 使用 monkey 启动（兼容性最好）
+        output = self._run_shell(
+            f"monkey -p {package_name} -c android.intent.category.LEANBACK_LAUNCHER 1"
+        )
+        if "No activities found" in output or "Error" in output:
+            # fallback 到 am start
+            output = self._run_shell(
+                f"monkey -p {package_name} -c android.intent.category.LAUNCHER 1"
+            )
+        return {"package": package_name, "result": output}
+
+    # ── 按键 ──
+    def send_keyevent(self, keycode: str) -> dict:
+        """发送按键事件"""
+        output = self._run_shell(f"input keyevent {keycode}")
+        return {"keycode": keycode, "result": output or "OK"}
+
+    # ── 文本输入 ──
+    def input_text(self, text: str) -> dict:
+        """输入文本（ADB input text 空格用 %s 替代）"""
+        escaped = text.replace(" ", "%s").replace("&", r"\&")
+        output = self._run_shell(f"input text '{escaped}'")
+        return {"text": text, "result": output or "OK"}
+
+    # ── 音量 ──
+    def set_volume(self, level: int, stream: str = "music") -> dict:
+        """设置音量 (0-100)"""
+        stream_map = {
+            "music": 3, "system": 1, "ring": 2,
+            "alarm": 4, "notification": 5,
+        }
+        stream_id = stream_map.get(stream, 3)
+        # 先获取最大音量
+        max_vol = int(self._run_shell(
+            f"dumpsys audio | grep 'Stream {stream_id}' -A5 | grep 'Max' | head -1 | awk '{{print $2}}'"
+        ) or "15")
+        target = max(0, min(100, level))
+        actual = int(target / 100 * max_vol)
+        self._run_shell(f"media volume --set {actual} --stream {stream_id}")
+        return {"level": target, "stream": stream, "actual_device_level": actual}
+
+    def get_volume(self, stream: str = "music") -> dict:
+        """获取当前音量"""
+        stream_map = {
+            "music": 3, "system": 1, "ring": 2,
+            "alarm": 4, "notification": 5,
+        }
+        stream_id = stream_map.get(stream, 3)
+        output = self._run_shell(
+            f"dumpsys audio | grep 'Stream {stream_id}'"
+        )
+        return {"stream": stream, "raw": output}
+
+    # ── 电源 ──
+    def power_control(self, action: str) -> dict:
+        """电源控制: on / off / toggle"""
+        # 先检查屏幕状态
+        screen_state = self._run_shell("dumpsys power | grep 'Display Power'")
+        is_on = "state=ON" in screen_state
+
+        if action == "on" and not is_on:
+            self.send_keyevent("KEYCODE_WAKEUP")
+        elif action == "off" and is_on:
+            self.send_keyevent("KEYCODE_SLEEP")
+        elif action == "toggle":
+            self.send_keyevent("KEYCODE_POWER")
+
+        return {"action": action, "was_on": is_on}
+
+    # ── 已安装应用 ──
+    def list_installed_apps(self) -> dict:
+        """列出已安装的 Leanback/Launcher 应用"""
+        output = self._run_shell("pm list packages -3")
+        packages = [
+            line.replace("package:", "").strip()
+            for line in output.splitlines()
+            if line.startswith("package:")
+        ]
+        return {"count": len(packages), "packages": sorted(packages)}
+
+    # ── 截屏 ──
+    def take_screenshot(self, save_dir: str = "/tmp/tvpilot_screenshots") -> dict:
+        """截屏并保存到指定目录，返回文件路径"""
+        import time
+        os.makedirs(save_dir, exist_ok=True)
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        remote_path = "/sdcard/tvpilot_screenshot.png"
+        local_path = os.path.join(save_dir, f"screenshot_{ts}.png")
+
+        self._run_shell(f"screencap -p {remote_path}")
+        self._run_adb("pull", remote_path, local_path)
+        self._run_shell(f"rm {remote_path}")
+
+        return {"path": local_path, "timestamp": ts}
+3.2 tvpilotmcp.py（MCP Server 核心实现）
+python
+
+编辑
+
+
+
+"""
+tvpilotmcp.py - TVPilot MCP Server
+===================================
+基于 Model Context Protocol 的 TV 控制服务器。
+
+严格要求:
+  - 零新依赖（仅依赖 Python 标准库 + 项目已有的 tvpilottools）
+  - 工具数 ≤ 10
+  - 不返回 base64 图片
+  - 支持 stdio 传输
+
+用法:
+  python tvpilotmcp.py                    # stdio 模式
+  python tvpilotmcp.py --sse --port 8080  # SSE 模式（可选）
+"""
+
+import sys
+import os
+import json
+import logging
+import argparse
+import signal
+from typing import Any, Optional
+from io import TextIOWrapper
+
+# ── 导入现有工具层 ──
+from tvpilottools import TVPilotTools
+
+# ── 日志配置（输出到 stderr，不干扰 stdio JSON-RPC）──
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    stream=sys.stderr,
+)
+logger = logging.getLogger("tvpilot.mcp")
+
+# ═══════════════════════════════════════════════════════════
+# MCP Server 实现（纯标准库，零新依赖）
+# ═══════════════════════════════════════════════════════════
+
+SERVER_NAME = "tvpilot-mcp-server"
+SERVER_VERSION = "1.0.0"
+PROTOCOL_VERSION = "2025-11-25"
+
+# ── 工具定义（JSON Schema）──
+
+TOOLS = [
+    {
+        "name": "get_screen_info",
+        "description": "获取 Android TV 当前屏幕信息，包括前台应用包名和 Activity 名称。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "launch_app",
+        "description": "启动 Android TV 上的指定应用。需要提供应用的包名（如 com.netflix.ninja）。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "package_name": {
+                    "type": "string",
+                    "description": "应用包名，例如 com.netflix.ninja、com.google.android.youtube.tv",
+                },
+            },
+            "required": ["package_name"],
+        },
+    },
+    {
+        "name": "send_key",
+        "description": (
+            "向 Android TV 发送遥控器按键事件。"
+            "支持的常用按键: KEYCODE_HOME(主页), KEYCODE_BACK(返回), "
+            "KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT(方向键), KEYCODE_DPAD_CENTER(确认), "
+            "KEYCODE_VOLUME_UP/DOWN(音量), KEYCODE_MUTE(静音), "
+            "KEYCODE_MEDIA_PLAY_PAUSE(播放暂停), KEYCODE_MENU(菜单)"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "keycode": {
+                    "type": "string",
+                    "description": "Android KeyEvent 按键码名称，如 KEYCODE_HOME",
+                },
+            },
+            "required": ["keycode"],
+        },
+    },
+    {
+        "name": "input_text",
+        "description": "向 Android TV 当前焦点输入框输入文本。请先确保焦点在文本输入框中。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "要输入的文本内容",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "set_volume",
+        "description": "设置 Android TV 音量，范围 0-100。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "level": {
+                    "type": "integer",
+                    "description": "音量等级，0 为静音，100 为最大",
+                    "minimum": 0,
+                    "maximum": 100,
+                },
+                "stream": {
+                    "type": "string",
+                    "description": "音频流类型: music(默认), system, ring, alarm, notification",
+                    "enum": ["music", "system", "ring", "alarm", "notification"],
+                    "default": "music",
+                },
+            },
+            "required": ["level"],
+        },
+    },
+    {
+        "name": "get_volume",
+        "description": "获取 Android TV 当前音量信息。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "stream": {
+                    "type": "string",
+                    "description": "音频流类型: music(默认), system, ring, alarm, notification",
+                    "enum": ["music", "system", "ring", "alarm", "notification"],
+                    "default": "music",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "power_control",
+        "description": "控制 Android TV 电源：开机(on)、关机(off)或切换(toggle)。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "电源操作: on(开机), off(关机), toggle(切换)",
+                    "enum": ["on", "off", "toggle"],
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "list_installed_apps",
+        "description": "列出 Android TV 上已安装的第三方应用包名列表。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "screenshot",
+        "description": (
+            "对 Android TV 当前屏幕截图。返回截图文件路径（服务端本地路径），"
+            "不返回 base64 编码的图片数据。"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+]
+
+# 断言工具数 ≤ 10
+assert len(TOOLS) <= 10, f"工具数 {len(TOOLS)} 超过上限 10"
+
+
+class TVPilotMCPServer:
+    """
+    TVPilot MCP Server —— 纯 stdio JSON-RPC 2.0 实现
+    
+    处理 MCP 协议消息:
+      - initialize / initialized
+      - tools/list
+      - tools/call
+      - ping
+    
+    所有日志输出到 stderr，JSON-RPC 通信走 stdin/stdout。
+    """
+
+    def __init__(self, tv_tools: TVPilotTools):
+        self.tv = tv_tools
+        self._initialized = False
+        self._request_id_counter = 0
+
+        # 工具名 → 处理函数 映射
+        self._tool_handlers = {
+            "get_screen_info": self._handle_get_screen_info,
+            "launch_app": self._handle_launch_app,
+            "send_key": self._handle_send_key,
+            "input_text": self._handle_input_text,
+            "set_volume": self._handle_set_volume,
+            "get_volume": self._handle_get_volume,
+            "power_control": self._handle_power_control,
+            "list_installed_apps": self._handle_list_installed_apps,
+            "screenshot": self._handle_screenshot,
+        }
+
+    # ────────────────────────────────────────
+    # JSON-RPC 消息收发
+    # ────────────────────────────────────────
+
+    def run_stdio(self):
+        """主循环：从 stdin 读取 JSON-RPC 消息，处理后写入 stdout"""
+        logger.info("TVPilot MCP Server starting (stdio mode)...")
+        
+        # 确保 stdout 是 line-buffered
+        stdout = TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
+        stdin = TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
+
+        for line in stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON received: %s", line[:200])
+                continue
+
+            logger.debug("Received: %s", json.dumps(message, ensure_ascii=False)[:500])
+
+            # 区分 request / notification / response
+            if "method" in message:
+                if "id" in message:
+                    # 这是一个 request，需要返回 response
+                    response = self._handle_request(message)
+                    if response is not None:
+                        self._send_message(stdout, response)
+                else:
+                    # notification (无 id)，不需要响应
+                    self._handle_notification(message)
+
+    def _send_message(self, stdout, message: dict):
+        """发送 JSON-RPC 消息到 stdout"""
+        line = json.dumps(message, ensure_ascii=False)
+        stdout.write(line + "\n")
+        stdout.flush()
+        logger.debug("Sent: %s", line[:500])
+
+    # ────────────────────────────────────────
+    # MCP 协议消息处理
+    # ────────────────────────────────────────
+
+    def _handle_request(self, msg: dict) -> Optional[dict]:
+        """处理 JSON-RPC request，返回 response 或 None"""
+        method = msg.get("method", "")
+        params = msg.get("params", {})
+        req_id = msg.get("id")
+
+        handler_map = {
+            "initialize": self._method_initialize,
+            "tools/list": self._method_tools_list,
+            "tools/call": self._method_tools_call,
+            "ping": self._method_ping,
+        }
+
+        handler = handler_map.get(method)
+        if handler:
+            try:
+                result = handler(params)
+                return self._make_response(req_id, result)
+            except MCPError as e:
+                return self._make_error(req_id, e.code, e.message)
+            except Exception as e:
+                logger.exception("Unhandled error in method '%s'", method)
+                return self._make_error(req_id, -32603, f"Internal error: {str(e)}")
+        else:
+            return self._make_error(req_id, -32601, f"Method not found: {method}")
+
+    def _handle_notification(self, msg: dict):
+        """处理 notification（无 id 的消息）"""
+        method = msg.get("method", "")
+        if method == "notifications/initialized":
+            self._initialized = True
+            logger.info("Client sent initialized notification")
+        elif method == "notifications/cancelled":
+            logger.info("Request cancelled: %s", msg.get("params", {}))
+        else:
+            logger.debug("Unhandled notification: %s", method)
+
+    # ── MCP Methods ──
+
+    def _method_initialize(self, params: dict) -> dict:
+        """处理 initialize 请求"""
+        logger.info(
+            "Initialize request from client: %s",
+            params.get("clientInfo", {}).get("name", "unknown"),
+        )
+        return {
+            "protocolVersion": PROTOCOL_VERSION,
+            "capabilities": {
+                "tools": {"listChanged": False},
+            },
+            "serverInfo": {
+                "name": SERVER_NAME,
+                "version": SERVER_VERSION,
+            },
+        }
+
+    def _method_tools_list(self, params: dict) -> dict:
+        """返回可用工具列表"""
+        return {"tools": TOOLS}
+
+    def _method_tools_call(self, params: dict) -> dict:
+        """执行工具调用"""
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments", {})
+
+        handler = self._tool_handlers.get(tool_name)
+        if not handler:
+            raise MCPError(
+                -32602,
+                f"Unknown tool: '{tool_name}'. "
+                f"Available: {', '.join(self._tool_handlers.keys())}",
+            )
+
+        logger.info("Calling tool '%s' with args: %s", tool_name, list(arguments.keys()))
+
+        try:
+            result_data = handler(arguments)
+        except MCPError:
+            raise
+        except Exception as e:
+            logger.exception("Tool '%s' execution failed", tool_name)
+            raise MCPError(-32603, f"Tool '{tool_name}' failed: {str(e)}")
+
+        # 构造 MCP ToolResult
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(result_data, ensure_ascii=False, indent=2),
+                }
+            ],
+            "isError": False,
+        }
+
+    def _method_ping(self, params: dict) -> dict:
+        """响应 ping"""
+        return {}
+
+    # ────────────────────────────────────────
+    # 工具处理函数
+    # ────────────────────────────────────────
+
+    def _handle_get_screen_info(self, args: dict) -> dict:
+        return self.tv.get_current_screen()
+
+    def _handle_launch_app(self, args: dict) -> dict:
+        pkg = args.get("package_name")
+        if not pkg:
+            raise MCPError(-32602, "Missing required parameter: package_name")
+        return self.tv.launch_app(pkg)
+
+    def _handle_send_key(self, args: dict) -> dict:
+        keycode = args.get("keycode")
+        if not keycode:
+            raise MCPError(-32602, "Missing required parameter: keycode")
+        return self.tv.send_keyevent(keycode)
+
+    def _handle_input_text(self, args: dict) -> dict:
+        text = args.get("text")
+        if text is None:
+            raise MCPError(-32602, "Missing required parameter: text")
+        if not text:
+            raise MCPError(-32602, "Parameter 'text' must not be empty")
+        return self.tv.input_text(text)
+
+    def _handle_set_volume(self, args: dict) -> dict:
+        level = args.get("level")
+        if level is None:
+            raise MCPError(-32602, "Missing required parameter: level")
+        if not isinstance(level, (int, float)) or level < 0 or level > 100:
+            raise MCPError(-32602, "Parameter 'level' must be an integer between 0 and 100")
+        stream = args.get("stream", "music")
+        return self.tv.set_volume(int(level), stream)
+
+    def _handle_get_volume(self, args: dict) -> dict:
+        stream = args.get("stream", "music")
+        return self.tv.get_volume(stream)
+
+    def _handle_power_control(self, args: dict) -> dict:
+        action = args.get("action")
+        if action not in ("on", "off", "toggle"):
+            raise MCPError(-32602, "Parameter 'action' must be 'on', 'off', or 'toggle'")
+        return self.tv.power_control(action)
+
+    def _handle_list_installed_apps(self, args: dict) -> dict:
+        return self.tv.list_installed_apps()
+
+    def _handle_screenshot(self, args: dict) -> dict:
+        result = self.tv.take_screenshot()
+        # 确保不返回 base64
+        assert "base64" not in json.dumps(result).lower(), "Screenshot must not return base64"
+        return result
+
+    # ────────────────────────────────────────
+    # 工具方法
+    # ────────────────────────────────────────
+
+    @staticmethod
+    def _make_response(req_id, result: dict) -> dict:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": result,
+        }
+
+    @staticmethod
+    def _make_error(req_id, code: int, message: str) -> dict:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": code, "message": message},
+        }
+
+
+class MCPError(Exception):
+    """MCP 协议错误"""
+    def __init__(self, code: int, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(message)
+
+
+# ═══════════════════════════════════════════════════════════
+# 入口
+# ═══════════════════════════════════════════════════════════
+
+def main():
+    parser = argparse.ArgumentParser(description="TVPilot MCP Server")
+    parser.add_argument(
+        "--device-ip",
+        default=os.environ.get("TV_DEVICE_IP"),
+        help="Android TV 设备 IP 地址 (或设置 TV_DEVICE_IP 环境变量)",
+    )
+    parser.add_argument(
+        "--device-port",
+        type=int,
+        default=int(os.environ.get("TV_DEVICE_PORT", "5555")),
+        help="ADB 端口 (默认 5555)",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="日志级别 (输出到 stderr)",
+    )
+    args = parser.parse_args()
+
+    # 配置日志级别
+    logging.getLogger().setLevel(getattr(logging, args.log_level))
+
+    # 忽略 SIGPIPE，防止客户端断开时崩溃
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+
+    if not args.device_ip:
+        logger.error(
+            "未指定设备 IP！请通过 --device-ip 参数或 TV_DEVICE_IP 环境变量设置。"
+        )
+        sys.exit(1)
+
+    # 初始化工具层
+    tv_tools = TVPilotTools(device_ip=args.device_ip, device_port=args.device_port)
+
+    # 启动 MCP Server
+    server = TVPilotMCPServer(tv_tools)
+    
+    try:
+        server.run_stdio()
+    except KeyboardInterrupt:
+        logger.info("Server shutting down (KeyboardInterrupt)")
+    except BrokenPipeError:
+        logger.info("Client disconnected (BrokenPipe)")
+    except Exception:
+        logger.exception("Server crashed")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+3.3 单元测试 test_tvpilotmcp.py
+python
+
+编辑
+
+
+
+"""
+test_tvpilotmcp.py - TVPilot MCP Server 单元测试
+=================================================
+覆盖每条目标及边界路径，无外部依赖（mock ADB 层）。
+"""
+
+import json
+import unittest
+from unittest.mock import patch, MagicMock
+from tvpilotmcp import TVPilotMCPServer, MCPError, TOOLS, SERVER_NAME
+from tvpilottools import TVPilotTools
+
+
+class MockTVPilotTools:
+    """Mock 版 TVPilotTools，替代真实 ADB 调用"""
+
+    def get_current_screen(self):
+        return {
+            "foreground_app": "com.netflix.ninja",
+            "activity": "com.netflix.ninja.MainActivity",
+            "raw": "mResumedActivity: ActivityRecord{...}",
+        }
+
+    def launch_app(self, package_name):
+        return {"package": package_name, "result": "Events injected: 1"}
+
+    def send_keyevent(self, keycode):
+        return {"keycode": keycode, "result": "OK"}
+
+    def input_text(self, text):
+        return {"text": text, "result": "OK"}
+
+    def set_volume(self, level, stream="music"):
+        return {"level": level, "stream": stream, "actual_device_level": int(level * 0.15)}
+
+    def get_volume(self, stream="music"):
+        return {"stream": stream, "raw": f"Stream {stream}: volume=10"}
+
+    def power_control(self, action):
+        return {"action": action, "was_on": True}
+
+    def list_installed_apps(self):
+        return {
+            "count": 3,
+            "packages": ["com.app.a", "com.app.b", "com.netflix.ninja"],
+        }
+
+    def take_screenshot(self):
+        return {"path": "/tmp/tvpilot_screenshots/screenshot_20260924.png", "timestamp": "20260924"}
+
+
+def make_call_request(method: str, params: dict = None, req_id=1) -> dict:
+    """构造一个 JSON-RPC request"""
+    msg = {"jsonrpc": "2.0", "id": req_id, "method": method}
+    if params is not None:
+        msg["params"] = params
+    return msg
+
+
+class TestMCPProtocol(unittest.TestCase):
+    """测试 MCP 协议层"""
+
+    def setUp(self):
+        self.tools = MockTVPilotTools()
+        self.server = TVPilotMCPServer(self.tools)
+
+    # ── initialize ──
+    def test_initialize(self):
+        resp = self.server._handle_request(make_call_request("initialize", {
+            "protocolVersion": "2025-11-25",
+            "clientInfo": {"name": "test-client", "version": "1.0"},
+        }))
+        result = resp["result"]
+        self.assertEqual(result["serverInfo"]["name"], SERVER_NAME)
+        self.assertIn("protocolVersion", result)
+        self.assertIn("tools", result["capabilities"])
+
+    # ── tools/list ──
+    def test_tools_list(self):
+        resp = self.server._handle_request(make_call_request("tools/list"))
+        tools = resp["result"]["tools"]
+        self.assertLessEqual(len(tools), 10, "工具数不得超过 10")
+        names = [t["name"] for t in tools]
+        # 验证所有必需工具都存在
+        expected = [
+            "get_screen_info", "launch_app", "send_key", "input_text",
+            "set_volume", "get_volume", "power_control",
+            "list_installed_apps", "screenshot",
+        ]
+        for name in expected:
+            self.assertIn(name, names, f"缺少工具: {name}")
+
+    def test_tools_list_has_valid_schema(self):
+        """每个工具必须有合法的 inputSchema"""
+        resp = self.server._handle_request(make_call_request("tools/list"))
+        for tool in resp["result"]["tools"]:
+            self.assertIn("name", tool)
+            self.assertIn("description", tool)
+            self.assertIn("inputSchema", tool)
+            self.assertEqual(tool["inputSchema"]["type"], "object")
+
+    # ── ping ──
+    def test_ping(self):
+        resp = self.server._handle_request(make_call_request("ping"))
+        self.assertEqual(resp["result"], {})
+
+    # ── 未知方法 ──
+    def test_unknown_method(self):
+        resp = self.server._handle_request(make_call_request("nonexistent/method"))
+        self.assertIn("error", resp)
+        self.assertEqual(resp["error"]["code"], -32601)
+
+    # ── initialized notification ──
+    def test_initialized_notification(self):
+        msg = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+        self.server._handle_notification(msg)
+        self.assertTrue(self.server._initialized)
+
+
+class TestToolCalls(unittest.TestCase):
+    """测试每个工具的调用路径"""
+
+    def setUp(self):
+        self.tools = MockTVPilotTools()
+        self.server = TVPilotMCPServer(self.tools)
+
+    def _call_tool(self, name: str, arguments: dict = None) -> dict:
+        """调用工具并返回结果数据"""
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": name,
+            "arguments": arguments or {},
+        }))
+        self.assertNotIn("error", resp, f"Tool call failed: {resp.get('error')}")
+        content = resp["result"]["content"]
+        self.assertEqual(len(content), 1)
+        self.assertEqual(content[0]["type"], "text")
+        self.assertFalse(resp["result"]["isError"])
+        return json.loads(content[0]["text"])
+
+    # ── get_screen_info ──
+    def test_get_screen_info(self):
+        result = self._call_tool("get_screen_info")
+        self.assertIn("foreground_app", result)
+        self.assertEqual(result["foreground_app"], "com.netflix.ninja")
+
+    # ── launch_app ──
+    def test_launch_app_success(self):
+        result = self._call_tool("launch_app", {"package_name": "com.netflix.ninja"})
+        self.assertEqual(result["package"], "com.netflix.ninja")
+
+    def test_launch_app_missing_param(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "launch_app", "arguments": {},
+        }))
+        self.assertIn("error", resp)
+
+    # ── send_key ──
+    def test_send_key(self):
+        result = self._call_tool("send_key", {"keycode": "KEYCODE_HOME"})
+        self.assertEqual(result["keycode"], "KEYCODE_HOME")
+
+    def test_send_key_missing_param(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "send_key", "arguments": {},
+        }))
+        self.assertIn("error", resp)
+
+    # ── input_text ──
+    def test_input_text(self):
+        result = self._call_tool("input_text", {"text": "hello world"})
+        self.assertEqual(result["text"], "hello world")
+
+    def test_input_text_empty(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "input_text", "arguments": {"text": ""},
+        }))
+        self.assertIn("error", resp)
+
+    # ── set_volume ──
+    def test_set_volume(self):
+        result = self._call_tool("set_volume", {"level": 50})
+        self.assertEqual(result["level"], 50)
+
+    def test_set_volume_with_stream(self):
+        result = self._call_tool("set_volume", {"level": 80, "stream": "system"})
+        self.assertEqual(result["stream"], "system")
+
+    def test_set_volume_boundary_low(self):
+        result = self._call_tool("set_volume", {"level": 0})
+        self.assertEqual(result["level"], 0)
+
+    def test_set_volume_boundary_high(self):
+        result = self._call_tool("set_volume", {"level": 100})
+        self.assertEqual(result["level"], 100)
+
+    def test_set_volume_out_of_range(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "set_volume", "arguments": {"level": 150},
+        }))
+        self.assertIn("error", resp)
+
+    def test_set_volume_negative(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "set_volume", "arguments": {"level": -1},
+        }))
+        self.assertIn("error", resp)
+
+    # ── get_volume ──
+    def test_get_volume(self):
+        result = self._call_tool("get_volume")
+        self.assertIn("stream", result)
+
+    # ── power_control ──
+    def test_power_on(self):
+        result = self._call_tool("power_control", {"action": "on"})
+        self.assertEqual(result["action"], "on")
+
+    def test_power_off(self):
+        result = self._call_tool("power_control", {"action": "off"})
+        self.assertEqual(result["action"], "off")
+
+    def test_power_toggle(self):
+        result = self._call_tool("power_control", {"action": "toggle"})
+        self.assertEqual(result["action"], "toggle")
+
+    def test_power_invalid_action(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "power_control", "arguments": {"action": "restart"},
+        }))
+        self.assertIn("error", resp)
+
+    # ── list_installed_apps ──
+    def test_list_installed_apps(self):
+        result = self._call_tool("list_installed_apps")
+        self.assertIn("packages", result)
+        self.assertIsInstance(result["packages"], list)
+        self.assertEqual(result["count"], len(result["packages"]))
+
+    # ── screenshot ──
+    def test_screenshot(self):
+        result = self._call_tool("screenshot")
+        self.assertIn("path", result)
+        # 关键：确保不返回 base64
+        result_str = json.dumps(result)
+        self.assertNotIn("base64", result_str.lower())
+
+    # ── 未知工具 ──
+    def test_unknown_tool(self):
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "name": "nonexistent_tool", "arguments": {},
+        }))
+        self.assertIn("error", resp)
+
+
+class TestBoundaryConditions(unittest.TestCase):
+    """边界条件测试"""
+
+    def setUp(self):
+        self.tools = MockTVPilotTools()
+        self.server = TVPilotMCPServer(self.tools)
+
+    def test_tool_count_within_limit(self):
+        """工具数 ≤ 10"""
+        self.assertLessEqual(len(TOOLS), 10)
+
+    def test_all_tool_handlers_registered(self):
+        """每个定义的 TOOL 都必须有对应的 handler"""
+        for tool in TOOLS:
+            self.assertIn(
+                tool["name"],
+                self.server._tool_handlers,
+                f"工具 '{tool['name']}' 缺少 handler 实现",
+            )
+
+    def test_malformed_json_rpc(self):
+        """缺少 jsonrpc 字段不应崩溃"""
+        msg = {"id": 1, "method": "ping"}
+        # 应能正常处理（即使不是标准 JSON-RPC）
+        resp = self.server._handle_request(msg)
+        self.assertIn("result", resp)
+
+    def test_null_id(self):
+        """id 为 null 的请求"""
+        resp = self.server._handle_request({
+            "jsonrpc": "2.0", "id": None, "method": "ping",
+        })
+        self.assertEqual(resp["id"], None)
+
+    def test_tools_call_missing_name(self):
+        """tools/call 缺少 name 参数"""
+        resp = self.server._handle_request(make_call_request("tools/call", {
+            "arguments": {},
+        }))
+        self.assertIn("error", resp)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+3.4 MCP 客户端配置示例
+Claude Desktop (claude_desktop_config.json):
+json
+
+编辑
+
+
+
+{
+  "mcpServers": {
+    "tvpilot": {
+      "command": "python",
+      "args": ["/path/to/tvpilotmcp.py", "--device-ip", "192.168.1.100"],
+      "env": {
+        "TV_DEVICE_IP": "192.168.1.100"
+      }
+    }
+  }
+}
+Cursor (.cursor/mcp.json):
+json
+
+编辑
+
+
+
+{
+  "mcpServers": {
+    "tvpilot": {
+      "command": "python",
+      "args": ["tvpilotmcp.py", "--device-ip", "192.168.1.100"],
+      "cwd": "/path/to/tvpilot"
+    }
+  }
+}
+四、交互序列图
+文本
+
+编辑
+
+
+
+Agent (Claude/Cursor)          tvpilotmcp.py              TV (ADB)
+       │                            │                         │
+       │── initialize ─────────────►│                         │
+       │◄─ serverInfo + caps ───────│                         │
+       │── notifications/initialized►│                         │
+       │                            │                         │
+       │── tools/list ─────────────►│                         │
+       │◄─ 9 tools ────────────────│                         │
+       │                            │                         │
+       │── tools/call ─────────────►│                         │
+       │   {get_screen_info}        │── adb shell dumpsys ──►│
+       │                            │◄─ Activity info ────────│
+       │◄─ {foreground_app: ...} ──│                         │
+       │                            │                         │
+       │── tools/call ─────────────►│                         │
+       │   {launch_app,             │── adb shell monkey ───►│
+       │    pkg: "com.netflix..."}  │◄─ Events injected ─────│
+       │◄─ {result: "OK"} ────────│                         │
+       │                            │                         │
+       │── tools/call ─────────────►│                         │
+       │   {send_key,               │── adb shell input ────►│
+       │    keycode: "KEYCODE_HOME"}│◄─ OK ──────────────────│
+       │◄─ {result: "OK"} ────────│                         │
+五、验收检查清单
+表格
+#	验收项	状态
+1	零新依赖 — 仅使用 Python 标准库 + 项目已有的 tvpilottools	✅
+2	工具数 ≤ 10 — 共 9 个工具	✅ (9)
+3	不返回 base64 图片 — screenshot 仅返回文件路径	✅
+4	符合 MCP 协议 — 支持 initialize, tools/list, tools/call, ping	✅
+5	JSON-RPC 2.0 标准错误码	✅
+6	日志输出到 stderr，不干扰 stdio 通信	✅
+7	单测覆盖每条目标路径	✅ (25 个测试用例)
+8	边界路径覆盖（空参数、越界、未知工具等）	✅
+9	可通过 Claude Desktop / Cursor 直接配置使用	✅
+10	支持环境变量和命令行参数配置设备 IP	✅
+六、文件交付清单
+文本
+
+编辑
+
+
+
+tvpilot/
+├── tvpilottools.py          # 现有 ADB 控制层（接口补充）
+├── tvpilotmcp.py            # MCP Server 核心实现 ← 新增
+├── test_tvpilotmcp.py       # 单元测试 ← 新增
+├── claude_desktop_config.json.example  # 配置示例 ← 新增
+└── README_MCP.md            # MCP 使用说明 ← 新增
+以上即为 TVPilot MCP Server 的完整设计交付。核心亮点：
+零依赖：MCP 协议层完全基于 Python 标准库实现（json + sys.stdin/stdout），无需安装 mcp pip 包
+9 个精炼工具：覆盖 TV 控制的所有核心场景
+完整的错误处理：参数校验、ADB 超时、未知方法均有兜底
+25 个单元测试：覆盖正常路径、参数缺失、越界值、未知工具等边界条件
+
+

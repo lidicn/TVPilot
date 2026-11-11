@@ -1,0 +1,5 @@
+# TVPilot Python 依赖
+# 注：alpine 容器中通过 apk 安装 py3-paho-mqtt 和 py3-pillow
+# 此文件用于本地开发环境参考
+paho-mqtt>=1.6.0
+Pillow>=9.0.0

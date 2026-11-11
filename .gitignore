@@ -1,0 +1,35 @@
+# ===== 运行时产物 / 缓存 =====
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tts_cache/
+static/shots/
+.deploy_probe
+
+# ===== 日志 / 操作存档（含个人信息明文，B2-TV-07）=====
+data/ops.jsonl
+data/*.log
+
+# ===== 凭据：零打印、不入库（A-TV-02）=====
+# adb 私钥/公钥只从 secrets/ 运行时只读挂载，绝不进镜像与构建上下文
+adbkey
+adbkey.pub
+# secrets/ 下只放行说明文件，私钥一律排除
+secrets/*
+!secrets/README.md
+# 明文 key 一律走 .env 注入；仅占位符模板可入库
+.env
+.env.*
+!.env.example
+# 历史快照含旧配置，不入库
+backup/
+# 真实 IPTV 流地址含 user:pass@，只保留脱敏样例
+data/*.m3u
+!data/gd_iptv_source.example.m3u
+
+# ===== 本地临时 =====
+_*.local
+
+# ===== 2026-11-11 P0：含口令纯数据/快照不入库 =====
+data/dbg.py
+doc/snap_tvpilot_server_*.py

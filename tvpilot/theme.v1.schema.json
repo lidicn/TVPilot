@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tvpilot.local/schemas/theme.v1.json",
+  "title": "TVPilot 电视端主题 v1.1",
+  "description": "每用户一份 theme.json；所有字段可选，缺省回退内置。anim 为开放的声明式动画描述（非枚举）；桌面图标契约 icons 为 v1.1 待补全。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "user": {
+      "type": "string",
+      "enum": [
+        "lidicn",
+        "Emily",
+        "Kevin"
+      ]
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 24
+    },
+    "wallpaper": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.(webp|png|jpg|jpeg)$"
+    },
+    "avatar": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.(png|webp)$"
+    },
+    "anim_style": {
+      "description": "向后兼容：内置基线 id 或自定义动画 id；不限制枚举",
+      "oneOf": [
+        {
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "anim": {
+      "$ref": "#/$defs/anim"
+    },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bg_top": {
+          "$ref": "#/$defs/color"
+        },
+        "bg_bottom": {
+          "$ref": "#/$defs/color"
+        },
+        "glow": {
+          "$ref": "#/$defs/color"
+        },
+        "anim_primary": {
+          "$ref": "#/$defs/color"
+        },
+        "anim_secondary": {
+          "$ref": "#/$defs/color"
+        },
+        "anim_bg_top": {
+          "$ref": "#/$defs/color"
+        },
+        "anim_bg_mid": {
+          "$ref": "#/$defs/color"
+        },
+        "anim_bg_bottom": {
+          "$ref": "#/$defs/color"
+        },
+        "background": {
+          "$ref": "#/$defs/color"
+        },
+        "surface": {
+          "$ref": "#/$defs/color"
+        },
+        "primary": {
+          "$ref": "#/$defs/color"
+        },
+        "accent": {
+          "$ref": "#/$defs/color"
+        },
+        "text": {
+          "$ref": "#/$defs/color"
+        },
+        "text_secondary": {
+          "$ref": "#/$defs/color"
+        },
+        "highlight": {
+          "$ref": "#/$defs/color"
+        },
+        "scrim": {
+          "$ref": "#/$defs/color"
+        },
+        "line": {
+          "$ref": "#/$defs/color"
+        }
+      }
+    },
+    "icons": {
+      "description": "v1.1 预留：桌面图标包契约，待本单 MiMo 设计稿补全后定义",
+      "type": "object"
+    },
+    "updated_at": {
+      "type": "number"
+    },
+    "schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "color": {
+      "type": "string",
+      "pattern": "^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+    },
+    "anim": {
+      "type": "object",
+      "description": "声明式动画描述；字段全部可选，id 不受枚举限制",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "palette": {
+          "type": "object"
+        },
+        "background": {
+          "type": "object"
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "arc",
+                  "aurora",
+                  "avatar_bitmap",
+                  "avatar_geometric",
+                  "blend",
+                  "brackets",
+                  "constellation",
+                  "dash_ring",
+                  "data_stream",
+                  "easing",
+                  "flash",
+                  "glow",
+                  "gradient_rect",
+                  "grid",
+                  "heart",
+                  "image",
+                  "line",
+                  "linear_gradient",
+                  "meteor",
+                  "orbit_ellipse",
+                  "particle_burst",
+                  "particle_converge",
+                  "particle_orbit",
+                  "particle_rain",
+                  "particle_swarm",
+                  "path",
+                  "petal",
+                  "polygon",
+                  "radial_gradient",
+                  "ring",
+                  "ripple",
+                  "scanline",
+                  "spiral",
+                  "starfield",
+                  "text",
+                  "text_label",
+                  "text_primary",
+                  "text_sub",
+                  "transform",
+                  "vignette",
+                  "wave"
+                ]
+              },
+              "paint": {
+                "type": "object",
+                "not": {
+                  "required": [
+                    "blur"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        },
+        "particles": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "timeline": {
+          "type": "object"
+        },
+        "avatar": {
+          "type": "object"
+        },
+        "text": {
+          "type": "object"
+        },
+        "audio": {
+          "type": "object"
+        },
+        "shrink_target": {},
+        "performance": {
+          "type": "object",
+          "properties": {
+            "max_layers": {
+              "type": "integer",
+              "maximum": 24
+            },
+            "max_particles": {
+              "type": "integer",
+              "maximum": 240
+            },
+            "target_fps": {
+              "type": "integer",
+              "minimum": 45
+            }
+          },
+          "required": [
+            "max_layers",
+            "max_particles",
+            "target_fps"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
