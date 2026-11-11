@@ -34,7 +34,9 @@ def generate_camera_m3u():
     """生成摄像头 M3U 条目（追加到 IPTV M3U 末尾）。"""
     import os
     import urllib.parse
-    go2rtc_auth = os.environ.get("GO2RTC_AUTH", "")
+    go2rtc_auth = os.environ.get('GO2RTC_AUTH')
+    if not go2rtc_auth:
+        raise RuntimeError('GO2RTC_AUTH 未设置：拒绝生成无凭据的摄像头 M3U（见 .env.example）')
     lines = []
     for cam in CAMERA_STREAMS:
         src_encoded = urllib.parse.quote(cam["go2rtc"])

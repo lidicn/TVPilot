@@ -1,11 +1,28 @@
 #!/usr/bin/env python3
-"""Restore xiaomi camera config to go2rtc.yaml"""
-import os
-import re
+"""Restore xiaomi camera config to go2rtc.yaml
 
-XIAOMI_UID = os.environ.get('XIAOMI_UID', '')
-XIAOMI_TOKEN = os.environ.get('XIAOMI_TOKEN', '')
-XIAOMI_AUTH = os.environ.get('XIAOMI_AUTH', '')
+凭据纪律（AF-PM 11-11 裁定）：XIAOMI_* 三项环境变量必填，缺失即 fail-fast
+报错退出；不以空值静默生成错误相机表。真值只从 .env 注入，不落盘、不打印。
+"""
+import os
+
+_REQUIRED_ENV = ('XIAOMI_UID', 'XIAOMI_TOKEN', 'XIAOMI_AUTH')
+
+
+def _require_env(names):
+    missing = [k for k in names if not os.environ.get(k)]
+    if missing:
+        raise SystemExit(
+            '缺少必填环境变量 %s：拒绝以空值生成相机表；'
+            '请在 .env 注入（键名见 secrets/README.md），本脚本不读取、不打印凭据值'
+            % ', '.join(missing)
+        )
+
+
+_require_env(_REQUIRED_ENV)
+XIAOMI_UID = os.environ['XIAOMI_UID']
+XIAOMI_TOKEN = os.environ['XIAOMI_TOKEN']
+XIAOMI_AUTH = os.environ['XIAOMI_AUTH']
 
 CONFIG = '/vol1/1000/docker/go2rtc/go2rtc.yaml'
 
