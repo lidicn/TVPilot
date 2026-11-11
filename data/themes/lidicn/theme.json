@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "schema": "tvpilot.theme/1.1",
+  "user": "lidicn",
+  "name": "深空金轨 · Orbit Gold",
+  "display_name": "lidicn",
+  "wallpaper": "wallpaper.webp",
+  "avatar": "avatar.png",
+  "anim_style": "orbit-gold",
+  "colors": {
+    "bg_top": "#0B1026",
+    "bg_bottom": "#05070C",
+    "glow": "#FFE7A8",
+    "anim_primary": "#F2B441",
+    "anim_secondary": "#37D6E0",
+    "anim_bg_top": "#16204A",
+    "anim_bg_mid": "#101A38",
+    "anim_bg_bottom": "#0B1026"
+  },
+  "icons": {
+    "dir": "icons",
+    "manifest": "icons/index.json",
+    "base_size": 96,
+    "hd_size": 192,
+    "shape": "squircle",
+    "corner_radius": 0.22,
+    "fallback": "letter",
+    "label": {"size": 20, "color": "#EAF0FF", "max_lines": 1},
+    "grid": {"cols": 6, "rows": 3},
+    "gap": 16
+  },
+  "anim": {
+    "id": "orbit-gold",
+    "name": "深空金轨：星云聚拢 + 扫描金环",
+    "palette": {
+      "primary": "#F2B441",
+      "secondary": "#37D6E0",
+      "accent": "#FFE7A8",
+      "bg_top": "#0B1026",
+      "bg_mid": "#16204A",
+      "bg_bottom": "#05070C"
+    },
+    "background": {"type": "gradient_rect", "angle": 120, "from": "#0B1026", "to": "#16204A"},
+    "layers": [
+      {"id": "bg", "type": "gradient_rect", "phase": "scan", "color": "#0B1026", "alpha": 1.0},
+      {"id": "nebula", "type": "radial_gradient", "phase": "scan", "color": "#1B2A5E", "alpha": 0.45, "params": {"stops": 3, "radius": 0.62}},
+      {"id": "stars", "type": "starfield", "phase": "scan", "color": "#EAF0FF", "alpha": 0.55, "params": {"count": 90, "twinkle": true, "parallax": 0.15}},
+      {"id": "aurora", "type": "aurora", "phase": "scan", "color": "#37D6E0", "alpha": 0.18, "params": {"bands": 3, "path_redraw": true}},
+      {"id": "orbit", "type": "orbit_ellipse", "phase": "scan", "color": "#F2B441", "alpha": 0.35, "params": {"rx": 0.34, "ry": 0.16, "tilt": -18}},
+      {"id": "ring", "type": "ring", "phase": "scan", "color": "#F2B441", "alpha": 0.9, "params": {"radius": 0.26, "width": 3}},
+      {"id": "arc", "type": "arc", "phase": "scan", "color": "#F2B441", "alpha": 0.95, "params": {"start": -200, "sweep": 140, "width": 3}},
+      {"id": "progress", "type": "dash_ring", "phase": "scan", "color": "#37D6E0", "alpha": 0.7, "params": {"radius": 0.31, "dash": [12, 18]}},
+      {"id": "scan", "type": "scanline", "phase": "scan", "color": "#37D6E0", "alpha": 0.5, "params": {"axis": "y", "width": 2, "speed": 0.35}},
+      {"id": "meteor", "type": "meteor", "phase": "success", "color": "#FFE7A8", "alpha": 0.6, "params": {"trail": 0.2}},
+      {"id": "halo", "type": "glow", "phase": "success", "color": "#F2B441", "alpha": 0.35, "params": {"strokes": 3, "spread": 6}},
+      {"id": "avatar", "type": "avatar_bitmap", "phase": "success", "params": {"shape": "circle", "border": "#F2B441", "border_width": 3}},
+      {"id": "name", "type": "text_primary", "phase": "success", "color": "#EAF0FF", "params": {"size": 54, "letter_spacing": 10}},
+      {"id": "label", "type": "text_label", "phase": "success", "color": "#8FA6D8", "params": {"size": 20, "text": "身份已确认"}},
+      {"id": "vignette", "type": "vignette", "phase": "shrink", "alpha": 0.35}
+    ],
+    "particles": [
+      {"system": "particle_converge", "count": 110, "color": "#F2B441", "speed": 0.6, "size": 3, "life": 1600, "phase": "scan"},
+      {"system": "particle_orbit", "count": 50, "color": "#37D6E0", "speed": 0.4, "size": 2, "life": 2200, "phase": "success"}
+    ],
+    "timeline": {
+      "scan": {"duration_ms": 2600, "layers": ["bg", "nebula", "stars", "aurora", "orbit", "ring", "arc", "progress", "scan"], "particles": ["particle_converge"], "transitions": ["fade_in"]},
+      "success": {"duration_ms": 1900, "layers": ["meteor", "halo", "avatar", "name", "label"], "particles": ["particle_orbit"], "transitions": ["converge_burst"]},
+      "shrink": {"duration_ms": 680, "layers": ["vignette"], "particles": [], "transitions": ["scale_to_corner"]}
+    },
+    "avatar": {"source": "bitmap", "shape": "circle", "ring": {"color": "#F2B441", "width": 3}, "entrance": {"type": "transform", "from_scale": 0.6, "to_scale": 1.0}},
+    "text": {"primary": {"size": 54, "letter_spacing": 10}, "label": {"size": 20, "text": "身份已确认"}, "sub": {"size": 16}},
+    "audio": {"enabled": false, "style": "sweep", "notes": [], "duration_ms": 0},
+    "shrink_target": "top-left",
+    "performance": {"max_layers": 15, "max_particles": 160, "target_fps": 48, "deterministic": true}
+  },
+  "updated_at": 1762848000
+}

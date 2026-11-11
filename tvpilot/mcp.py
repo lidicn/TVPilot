@@ -603,11 +603,20 @@ def _t_theme_status(args):
 
 
 def _t_theme_push(args):
-    """下发主题：user 单发或 all=true 全发。"""
+    """下发主题：user 单发或 all=true 全发。
+
+    fail-closed：manifest 未通过 validate_manifest_keys(strict=True) 时拒绝下发，
+    报错体带 violations[{key, reason}]（AF-PM 11-11 裁定 ④）。
+    """
     from tvpilot import theme
     res = theme.push(user=args.get('user'), all_users=bool(args.get('all')))
     if not res.get('ok'):
-        return _err_content(res.get('error') or 'push failed')
+        body = {'error': res.get('error') or 'push failed'}
+        if res.get('violations'):
+            body['violations'] = res['violations']
+        return {'content': [{'type': 'text', 'text': json.dumps(
+            body, ensure_ascii=False, separators=(',', ':'))}],
+            'isError': True}
     return _ok_content(res)
 
 

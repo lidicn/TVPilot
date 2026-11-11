@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "schema": "tvpilot.theme/1.1",
+  "user": "Kevin",
+  "name": "电路脉冲 · Circuit Pulse",
+  "display_name": "Kevin",
+  "wallpaper": "wallpaper.webp",
+  "avatar": "avatar.png",
+  "anim_style": "circuit-pulse",
+  "colors": {
+    "bg_top": "#0C0F14",
+    "bg_bottom": "#05070A",
+    "glow": "#FF7A3D",
+    "anim_primary": "#2BE8D6",
+    "anim_secondary": "#FF7A3D",
+    "anim_bg_top": "#141A22",
+    "anim_bg_mid": "#0C0F14",
+    "anim_bg_bottom": "#05070A"
+  },
+  "icons": {
+    "dir": "icons",
+    "manifest": "icons/index.json",
+    "base_size": 96,
+    "hd_size": 192,
+    "shape": "squircle",
+    "corner_radius": 0.22,
+    "fallback": "letter",
+    "label": {"size": 20, "color": "#EAF0FF", "max_lines": 1},
+    "grid": {"cols": 6, "rows": 3},
+    "gap": 16
+  },
+  "anim": {
+    "id": "circuit-pulse",
+    "name": "电路脉冲：网格扫描 + 数据脉冲",
+    "palette": {
+      "primary": "#2BE8D6",
+      "secondary": "#FF7A3D",
+      "accent": "#E8F1FF",
+      "bg_top": "#0C0F14",
+      "bg_mid": "#141A22",
+      "bg_bottom": "#05070A"
+    },
+    "background": {"type": "gradient_rect", "angle": 120, "from": "#0C0F14", "to": "#141A22"},
+    "layers": [
+      {"id": "bg", "type": "gradient_rect", "phase": "scan", "color": "#0C0F14", "alpha": 1.0},
+      {"id": "grid", "type": "grid", "phase": "scan", "color": "#2A3441", "alpha": 0.4, "params": {"cols": 16, "rows": 9, "grow": true}},
+      {"id": "scan", "type": "scanline", "phase": "scan", "color": "#2BE8D6", "alpha": 0.55, "params": {"axis": "y", "width": 2, "speed": 0.4}},
+      {"id": "trace_a", "type": "line", "phase": "scan", "color": "#2BE8D6", "alpha": 0.8, "params": {"grow": true}},
+      {"id": "trace_b", "type": "path", "phase": "scan", "color": "#FF7A3D", "alpha": 0.7, "params": {"beziers": 3, "grow": true}},
+      {"id": "brackets", "type": "brackets", "phase": "scan", "color": "#E8F1FF", "alpha": 0.6, "params": {"corner": 0.08}},
+      {"id": "data", "type": "data_stream", "phase": "scan", "color": "#2BE8D6", "alpha": 0.35, "params": {"columns": 8, "speed": 0.5}},
+      {"id": "poly", "type": "polygon", "phase": "scan", "color": "#FF7A3D", "alpha": 0.4, "params": {"sides": 6}},
+      {"id": "progress", "type": "dash_ring", "phase": "scan", "color": "#2BE8D6", "alpha": 0.7, "params": {"radius": 0.3, "dash": [16, 10]}},
+      {"id": "flash", "type": "flash", "phase": "success", "color": "#FF7A3D", "alpha": 0.35, "params": {"slices": 6, "offset_px": 6}},
+      {"id": "shift", "type": "transform", "phase": "success", "params": {"keyframes": [6, 18], "axis": "x"}},
+      {"id": "halo", "type": "glow", "phase": "success", "color": "#2BE8D6", "alpha": 0.3, "params": {"strokes": 3, "spread": 5}},
+      {"id": "avatar", "type": "avatar_geometric", "phase": "success", "params": {"shape": "squircle", "border": "#2BE8D6", "border_width": 3}},
+      {"id": "name", "type": "text_primary", "phase": "success", "color": "#E8F1FF", "params": {"size": 52, "letter_spacing": 6, "reveal": "scan"}},
+      {"id": "sub", "type": "text_sub", "phase": "success", "color": "#7E8EA3", "alpha": 0.85, "params": {"size": 16}},
+      {"id": "vignette", "type": "vignette", "phase": "shrink", "alpha": 0.35}
+    ],
+    "particles": [
+      {"system": "particle_burst", "count": 80, "color": "#FF7A3D", "speed": 0.7, "size": 3, "life": 1200, "phase": "success"},
+      {"system": "particle_orbit", "count": 70, "color": "#2BE8D6", "speed": 0.45, "size": 2, "life": 2000, "phase": "scan"}
+    ],
+    "timeline": {
+      "scan": {"duration_ms": 2600, "layers": ["bg", "grid", "scan", "trace_a", "trace_b", "brackets", "data", "poly", "progress"], "particles": ["particle_orbit"], "transitions": ["grid_light_up"]},
+      "success": {"duration_ms": 1900, "layers": ["flash", "shift", "halo", "avatar", "name", "sub"], "particles": ["particle_burst"], "transitions": ["slice_shift"]},
+      "shrink": {"duration_ms": 680, "layers": ["vignette"], "particles": [], "transitions": ["scale_to_corner"]}
+    },
+    "avatar": {"source": "geometric", "shape": "squircle", "ring": {"color": "#2BE8D6", "width": 3}, "entrance": {"type": "transform", "from_scale": 0.6, "to_scale": 1.0}},
+    "text": {"primary": {"size": 52, "letter_spacing": 6}, "label": {"size": 18}, "sub": {"size": 16}},
+    "audio": {"enabled": false, "style": "pulse", "notes": [], "duration_ms": 0},
+    "shrink_target": "top-right",
+    "performance": {"max_layers": 16, "max_particles": 150, "target_fps": 48, "deterministic": true}
+  },
+  "updated_at": 1762848000
+}

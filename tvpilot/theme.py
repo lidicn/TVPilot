@@ -4,6 +4,8 @@
 源目录 /app/data/themes（data/ 已挂载），目标 /sdcard/TVPilot/themes。
 
 设计：离线优先、三级回退由电视端负责；本层只做「校验 + 列举 + adb push」。
+P1（AF-PM 11-11 裁定 ④）：下发前接 validate_manifest_keys(strict=True)，
+fail-closed；不合格 manifest 不下发，报错体带 violations[{key, reason}]。
 """
 import os
 import json
@@ -12,6 +14,7 @@ import subprocess
 import time
 
 from tvpilot.adb import ADB, adb_shell_output
+from tvpilot import theme_violations
 
 THEMES_DIR = os.environ.get('TVPILOT_THEMES_DIR', '/app/data/themes')
 TV_DIR = '/sdcard/TVPilot/themes'
@@ -53,29 +56,38 @@ def _user_dir(user):
     return os.path.join(THEMES_DIR, user)
 
 
-def validate(user):
-    """校验一个主题目录，返回 (ok, files, error)。"""
+def _read_manifest(user):
+    """读一份 theme.json，返回 (data, violations)。只做基础/契约校验，不碰设备。"""
     if not _safe_name(user):
-        return False, [], 'invalid user name'
+        return None, [{'key': 'user', 'reason': 'invalid user name'}]
     d = _user_dir(user)
     if not os.path.isdir(d):
-        return False, [], 'theme dir not found: %s' % d
-
+        return None, [{'key': 'theme_dir', 'reason': 'theme dir not found: %s' % d}]
     manifest = os.path.join(d, 'theme.json')
     if not os.path.isfile(manifest):
-        return False, [], 'theme.json missing'
+        return None, [{'key': 'theme.json', 'reason': 'theme.json missing'}]
     if os.path.getsize(manifest) > MAX_JSON:
-        return False, [], 'theme.json too large'
+        return None, [{'key': 'theme.json', 'reason': 'theme.json too large'}]
     try:
         with open(manifest, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if not isinstance(data, dict):
             raise ValueError('not an object')
         if int(data.get('version', 1)) != 1:
-            return False, [], 'unsupported theme version'
+            return None, [{'key': 'version', 'reason': 'unsupported theme version'}]
     except Exception as e:
-        return False, [], 'bad theme.json: %s' % e
+        return None, [{'key': 'theme.json', 'reason': 'bad theme.json: %s' % e}]
 
+    # 契约硬闸：fail-closed，唯一真源在 tvpilot/theme_contract.py。
+    res, violations = theme_violations.validate(data, strict=True)
+    if not res['ok']:
+        return None, violations
+    return data, []
+
+
+def _asset_files(user, data):
+    """按文件名白名单挑出实际存在的素材，返回 (ok, files, violations)。"""
+    d = _user_dir(user)
     files = ['theme.json']
     declared = []
     for key in ('wallpaper', 'avatar'):
@@ -86,16 +98,37 @@ def validate(user):
         if n in declared or os.path.isfile(os.path.join(d, n)):
             if n not in files:
                 files.append(n)
-
     for n in files[1:]:
         p = os.path.join(d, n)
         if not os.path.isfile(p):
             continue
         limit = MAX_AVATAR if n.startswith('avatar') else MAX_WALLPAPER
         if os.path.getsize(p) > limit:
-            return False, [], '%s exceeds size limit' % n
+            return False, [], [{'key': n, 'reason': '%s exceeds size limit' % n}]
     files = [n for n in files if os.path.isfile(os.path.join(d, n))]
+    return True, files, []
+
+
+def validate(user):
+    """校验一个主题目录，返回 (ok, files, error)。
+
+    契约不合格时 fail-closed：ok=False，且不下发任何文件。
+    """
+    data, violations = _read_manifest(user)
+    if data is None:
+        return False, [], '; '.join(
+            '%s: %s' % (v['key'], v['reason']) for v in violations)
+    ok, files, violations = _asset_files(user, data)
+    if not ok:
+        return False, [], '; '.join(
+            '%s: %s' % (v['key'], v['reason']) for v in violations)
     return True, files, None
+
+
+def validate_manifest(user):
+    """返回 (ok, violations[{key, reason}])；供 push 报错体结构化输出。"""
+    data, violations = _read_manifest(user)
+    return data is not None, violations
 
 
 def list_themes():
@@ -142,9 +175,16 @@ def tv_status(user=None):
 
 
 def _push_one(user):
-    ok, files, err = validate(user)
+    """下发单个用户：契约闸在最前，不合格即拒，绝不调用 adb。"""
+    data, violations = _read_manifest(user)
+    if data is None:
+        return {'user': user, 'ok': False,
+                'error': 'manifest validation failed', 'violations': violations}
+    ok, files, violations = _asset_files(user, data)
     if not ok:
-        return {'user': user, 'ok': False, 'error': err}
+        return {'user': user, 'ok': False,
+                'error': 'asset validation failed', 'violations': violations}
+
     d = _user_dir(user)
     tv_dir = '%s/%s' % (TV_DIR, user)
     adb_shell_output('mkdir -p %s' % tv_dir, timeout=8)
@@ -165,7 +205,7 @@ def _push_one(user):
 
 
 def push(user=None, all_users=False):
-    """下发主题。user 指定单个，或 all_users=True 下发全部。"""
+    """下发主题。user 指定单个，或 all_users=True 下发全部。fail-closed。"""
     if all_users:
         users = list(KNOWN_USERS)
     elif user:
@@ -173,7 +213,12 @@ def push(user=None, all_users=False):
     else:
         return {'ok': False, 'error': 'user or all=true is required', 'results': []}
     results = [_push_one(u) for u in users]
-    return {'ok': all(r['ok'] for r in results), 'results': results}
+    out = {'ok': all(r['ok'] for r in results), 'results': results}
+    violations = [v for r in results for v in r.get('violations', [])]
+    if violations:
+        out['violations'] = violations
+        out['error'] = 'manifest validation failed'
+    return out
 
 
 def spec():
@@ -181,5 +226,5 @@ def spec():
     return dict(SPEC_SUMMARY)
 
 
-__all__ = ['validate', 'list_themes', 'tv_status', 'push', 'spec',
-           'SPEC_SUMMARY', 'KNOWN_USERS']
+__all__ = ['validate', 'validate_manifest', 'list_themes', 'tv_status', 'push',
+           'spec', 'SPEC_SUMMARY', 'KNOWN_USERS']

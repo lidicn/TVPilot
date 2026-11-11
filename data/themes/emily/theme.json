@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "schema": "tvpilot.theme/1.1",
+  "user": "Emily",
+  "name": "晨雾花瓣 · Mist Petal",
+  "display_name": "Emily",
+  "wallpaper": "wallpaper.webp",
+  "avatar": "avatar.png",
+  "anim_style": "mist-petal",
+  "colors": {
+    "bg_top": "#0F2E33",
+    "bg_bottom": "#07171C",
+    "glow": "#FF9EC4",
+    "anim_primary": "#6FE3C8",
+    "anim_secondary": "#C89BF2",
+    "anim_bg_top": "#123F4A",
+    "anim_bg_mid": "#0F2E33",
+    "anim_bg_bottom": "#07171C"
+  },
+  "icons": {
+    "dir": "icons",
+    "manifest": "icons/index.json",
+    "base_size": 96,
+    "hd_size": 192,
+    "shape": "squircle",
+    "corner_radius": 0.22,
+    "fallback": "letter",
+    "label": {"size": 20, "color": "#EAF0FF", "max_lines": 1},
+    "grid": {"cols": 6, "rows": 3},
+    "gap": 16
+  },
+  "anim": {
+    "id": "mist-petal",
+    "name": "晨雾花瓣：柔雾 + 花瓣 + 爱心波纹",
+    "palette": {
+      "primary": "#6FE3C8",
+      "secondary": "#C89BF2",
+      "accent": "#FF9EC4",
+      "bg_top": "#0F2E33",
+      "bg_mid": "#123F4A",
+      "bg_bottom": "#07171C"
+    },
+    "background": {"type": "linear_gradient", "angle": 160, "from": "#0F2E33", "to": "#123F4A"},
+    "layers": [
+      {"id": "bg", "type": "linear_gradient", "phase": "scan", "color": "#0F2E33", "alpha": 1.0},
+      {"id": "fog", "type": "aurora", "phase": "scan", "color": "#C89BF2", "alpha": 0.16, "params": {"bands": 3, "path_redraw": true}},
+      {"id": "mist", "type": "wave", "phase": "scan", "color": "#6FE3C8", "alpha": 0.28, "params": {"amplitude": 0.08, "wavelength": 0.5}},
+      {"id": "petals", "type": "petal", "phase": "scan", "color": "#FF9EC4", "alpha": 0.75, "params": {"count": 12, "rotation": true}},
+      {"id": "heart", "type": "heart", "phase": "success", "color": "#FF9EC4", "alpha": 0.7, "params": {"scale": 0.18}},
+      {"id": "ripple", "type": "ripple", "phase": "success", "color": "#C89BF2", "alpha": 0.45, "params": {"rings": 3, "speed": 0.4}},
+      {"id": "spiral", "type": "spiral", "phase": "scan", "color": "#6FE3C8", "alpha": 0.3, "params": {"turns": 2}},
+      {"id": "orbit", "type": "orbit_ellipse", "phase": "scan", "color": "#C89BF2", "alpha": 0.3, "params": {"rx": 0.3, "ry": 0.2, "tilt": 12}},
+      {"id": "ring", "type": "ring", "phase": "scan", "color": "#6FE3C8", "alpha": 0.8, "params": {"radius": 0.24, "width": 2}},
+      {"id": "progress", "type": "dash_ring", "phase": "scan", "color": "#FF9EC4", "alpha": 0.65, "params": {"radius": 0.29, "dash": [10, 14]}},
+      {"id": "halo", "type": "glow", "phase": "success", "color": "#6FE3C8", "alpha": 0.3, "params": {"strokes": 3, "spread": 5}},
+      {"id": "avatar", "type": "avatar_geometric", "phase": "success", "params": {"shape": "circle", "border": "#6FE3C8", "border_width": 3}},
+      {"id": "name", "type": "text_primary", "phase": "success", "color": "#F2FBFF", "params": {"size": 54, "letter_spacing": 10}},
+      {"id": "label", "type": "text_label", "phase": "success", "color": "#9FC8D6", "params": {"size": 20, "text": "欢迎回来"}},
+      {"id": "sub", "type": "text_sub", "phase": "success", "color": "#9FC8D6", "alpha": 0.8, "params": {"size": 16}},
+      {"id": "vignette", "type": "vignette", "phase": "shrink", "alpha": 0.3}
+    ],
+    "particles": [
+      {"system": "particle_rain", "count": 90, "color": "#FF9EC4", "speed": 0.35, "size": 3, "life": 1800, "phase": "scan"},
+      {"system": "particle_swarm", "count": 60, "color": "#6FE3C8", "speed": 0.3, "size": 2, "life": 2200, "phase": "success"}
+    ],
+    "timeline": {
+      "scan": {"duration_ms": 2600, "layers": ["bg", "fog", "mist", "petals", "spiral", "orbit", "ring", "progress"], "particles": ["particle_rain"], "transitions": ["fade_in"]},
+      "success": {"duration_ms": 1900, "layers": ["heart", "ripple", "halo", "avatar", "name", "label", "sub"], "particles": ["particle_swarm"], "transitions": ["petal_bloom"]},
+      "shrink": {"duration_ms": 680, "layers": ["vignette"], "particles": [], "transitions": ["scale_to_corner"]}
+    },
+    "avatar": {"source": "geometric", "shape": "circle", "ring": {"color": "#6FE3C8", "width": 3}, "entrance": {"type": "transform", "from_scale": 0.6, "to_scale": 1.0}},
+    "text": {"primary": {"size": 54, "letter_spacing": 10}, "label": {"size": 20, "text": "欢迎回来"}, "sub": {"size": 16}},
+    "audio": {"enabled": false, "style": "chime", "notes": [], "duration_ms": 0},
+    "shrink_target": "top-right",
+    "performance": {"max_layers": 16, "max_particles": 150, "target_fps": 48, "deterministic": true}
+  },
+  "updated_at": 1762848000
+}
