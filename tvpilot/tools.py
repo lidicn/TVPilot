@@ -555,6 +555,63 @@ def wait_for_playback_page(timeout=ZAP_PLAYBACK_TIMEOUT,
                    'timeout_s': timeout, 'wait_s': round(time.time() - start, 2)}
 
 
+# ---- 阶段 2 判据（AF-PM 11-12）：IPTV 前台 + 窗口全屏 -------------------
+# 现读证据：IPTV app 不注册媒体会话，`dumpsys media_session` 恒为空，
+# 所以⛔ 不用 media_session 判播放态（永远假会一直拦住换台）。改用
+# `dumpsys window windows` 的 mCurrentFocus + mFrame / mDisplayFrame。
+_WINDOW_FRAME_RE = re.compile(r'(mFrame|mDisplayFrame)=\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+_IPTV_FOCUS_RE = re.compile(
+    r'^\s*mCurrentFocus=.*com\.android\.smart\.terminal\.iptv', re.M)
+
+
+def _window_frames(text):
+    """从 dumpsys window 文本里抽 mFrame / mDisplayFrame 矩形，返回 {key: [x1,y1,x2,y2]}。"""
+    out = {}
+    for m in _WINDOW_FRAME_RE.finditer(text):
+        out.setdefault(m.group(1), [int(m.group(i)) for i in range(2, 6)])
+    return out
+
+
+def _iptv_window_block(text):
+    """按 `Window #N` 分块，挑出含 IPTV 包名的那块；找不到则退化为全文。"""
+    parts = re.split(r'(?=^\s*Window #\d+ )', text, flags=re.M)
+    for p in parts:
+        if IPTV_PKG in p and 'mFrame=' in p:
+            return p
+    return text if IPTV_PKG in text else ''
+
+
+def iptv_fullscreen_playing():
+    """阶段 2 判据：IPTV 前台 + 窗口全屏 → True；否则 / 异常 → False（fail-closed）。
+
+    三条只读子判据（来自 `dumpsys window windows` 一次读取）：
+      ① `mCurrentFocus` 含 `com.android.smart.terminal.iptv`（IPTV 在前台）；
+      ② IPTV 窗口 `mFrame` 与 `mDisplayFrame` 都存在（有窗口几何）；
+      ③ 两者矩形同尺寸（全屏，非导航页/分屏/悬浮窗）。
+    ⛔ 不用 media_session（已证恒空返回）。**全程只读、零注入、零前台变更**；
+    `adb_shell_output` 异常一律返回 (False, detail)，由调用方零注入。
+    返回 (ok: bool, detail: dict)；detail 只含结构化字段，不打印 dumpsys 原文。
+    """
+    try:
+        out = adb_shell_output('dumpsys window windows', timeout=10) or ''
+    except Exception as e:
+        return False, {'reason': 'dumpsys_window_unavailable', 'error': type(e).__name__}
+    focus_ok = bool(_IPTV_FOCUS_RE.search(out))
+    block = _iptv_window_block(out)
+    frames = _window_frames(block)
+    mf, md = frames.get('mFrame'), frames.get('mDisplayFrame')
+    fullscreen = bool(mf and md and mf == md)
+    detail = {
+        'iptv_foreground': focus_ok,
+        'mFrame': mf,
+        'mDisplayFrame': md,
+        'fullscreen': fullscreen,
+        'window_block_found': bool(block),
+        'window_block_len': len(block),
+    }
+    return (focus_ok and fullscreen), detail
+
+
 def zap_via_adb_digits(channel_no):
     """恢复 v0.8.1 逐位注入（AF-PM 11-12 判决）：每个数字一条独立 adb_cmd。
 
@@ -1118,7 +1175,7 @@ def tool_batch(actions):
 __all__ = [
     'MYTV_ACT', 'IPTV_PKG', 'IPTV_ACT', 'TVREMOTEIME_PKG', 'TVREMOTEIME_SVC', 'TVREMOTEIME_ACTION',
     'ZAP_FOREGROUND_TIMEOUT', 'ZAP_PLAYBACK_TIMEOUT', 'ZAP_PLAYBACK_POLL_INTERVAL', '_FG_LOCK',
-    'ensure_mytv_foreground', 'wait_for_playback_page',
+    'ensure_mytv_foreground', 'wait_for_playback_page', 'iptv_fullscreen_playing',
     'tool_foreground', 'tool_keyevent', 'tool_tap', 'tool_swipe', 'tool_wait',
     'tool_wait_for_foreground',
     'get_current_ime', 'ensure_tvremoteime', 'tool_input_text',
