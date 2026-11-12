@@ -12,6 +12,7 @@ services:
       # 操作存档持久化（JSONL + 失败截图）
       - ./data:/app/data
       # v0.9: 不再挂载 docker.sock（安全加固，go2rtc 改由其他方式管理）
+      # 2026-11-12: go2rtc 换台链路已停用，整体隔离归档（代码原样保留、可复活），见 archive/go2rtc/README.md
       # ADB 私钥运行时只读挂载（A-TV-02：私钥永不进镜像/构建上下文）
       - ./secrets/adbkey:/root/.android/adbkey:ro
       - ./secrets/adbkey.pub:/root/.android/adbkey.pub:ro

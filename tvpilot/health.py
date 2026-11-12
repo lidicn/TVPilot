@@ -11,7 +11,8 @@ import urllib.request
 from tvpilot.adb import adb_ready, _CMD_LOCK
 from tvpilot.state import get_foreground_pkg, mytv_alive
 from tvpilot.channels import NAMES, channel_numbers_map
-from tvpilot.legacy import GO2RTC_AUTH_USER, GO2RTC_AUTH_PASS, MYTV_HTTP
+# 旧 mytv HTTP 代理已归档；健康探测仍读本地配置，不引用归档模块
+MYTV_HTTP = os.environ.get('MYTV_HTTP', 'http://192.168.2.238:10482')
 
 TVPILOT_VERSION = os.environ.get('TVPILOT_VERSION', '0.9.0')
 IPTV_LOCAL_FILE = os.environ.get('TVPILOT_IPTV_SOURCE', os.path.join(
@@ -47,7 +48,6 @@ def health_check():
         'mqtt_connected': mqtt_state.get('connected', False),
         'iptv_source_present': os.path.exists(IPTV_LOCAL_FILE),
         'docker_sock': os.path.exists(DOCKER_SOCK),
-        'go2rtc_creds_configured': bool(GO2RTC_AUTH_USER and GO2RTC_AUTH_PASS),
         'wake_local': WAKE_LOCAL,
         'problems': [],
     }

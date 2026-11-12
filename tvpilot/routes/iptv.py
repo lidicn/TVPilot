@@ -14,15 +14,10 @@ from tvpilot.channels import NAMES, channel_numbers_map, channel_name_of_no
 def handle_iptv_routes(handler, path, q):
     """处理所有 /iptv/* 和 /api/iptv/* GET 路由。返回 True 表示已处理。"""
 
-    # RTSP 刷新状态查询
+    # RTSP 刷新状态查询（旧链路已归档隔离）：端点保留，明确返 410 Gone
     if path == '/api/iptv/refresh_status':
-        from tvpilot_server import _refresh_rtsp_state
-        handler._json({
-            'ok': True,
-            'running': _refresh_rtsp_state['running'],
-            'last_success': _refresh_rtsp_state['last_success'],
-            'message': _refresh_rtsp_state['message'],
-        })
+        handler._json({'ok': False, 'error': 'deprecated',
+                       'see': 'archive/README.md'}, 410)
         return True
 
     # IPTV 直播源代理
@@ -139,16 +134,15 @@ def handle_channels(handler, path, q):
                 if current_group in group_map:
                     groups[group_map[current_group]]['channels'].append(no)
         channels.sort(key=lambda x: (x['no'] == 0, x['no']))
-        zappable = sum(1 for c in channels if c['zappable'])
         handler._json({
             'ok': True,
-            'count': len(channels),
-            'zappable_count': zappable,
-            'go2rtc_count': len(NAMES),
+            'count': len(NAMES),
+            'zappable_count': len(channel_numbers_map()),
+            'm3u_entry_count': len(channels),
             'count_semantics': {
-                'count': '电信抓包 M3U 频道总数（/api/channels 列表长度）',
+                'count': 'channels.json 权威频道数（80，与 /api/health.channels_count 同源）',
                 'zappable_count': '其中在 channel_numbers.json 有数字台号、可数字键换台数',
-                'go2rtc_count': 'channels.json 的 go2rtc 可播流数（mytv 实际可播集合，/api/health.channels_count）',
+                'm3u_entry_count': '电信抓包 M3U 的 #EXTINF 条目数（含测试/重复，非权威）',
             },
             'groups': groups, 'channels': channels})
     except Exception as e:

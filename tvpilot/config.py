@@ -54,12 +54,6 @@ DOUBAO_API_URL = os.environ.get('DOUBAO_API_URL', 'http://192.168.2.200:9090/v1/
 DOUBAO_API_KEY = os.environ.get('DOUBAO_API_KEY', '')
 DOUBAO_MODEL = os.environ.get('DOUBAO_MODEL', 'doubao-pro')
 
-# ========== go2rtc（归档保留） ==========
-GO2RTC_BASE = os.environ.get('GO2RTC_BASE', 'http://127.0.0.1:1984')
-GO2RTC_AUTH_USER = os.environ.get('GO2RTC_USER', '')
-GO2RTC_AUTH_PASS = os.environ.get('GO2RTC_PASS', '')
-GW_ACTIVE = GO2RTC_BASE + '/api/streams'
-
 # ========== RTSP 刷新（归档保留） ==========
 ADMIN_TOKEN = os.environ.get('TVPILOT_ADMIN_TOKEN') or None
 DEVICE_TOKEN = os.environ.get('TVPILOT_DEVICE_TOKEN') or ADMIN_TOKEN
@@ -91,7 +85,6 @@ __all__ = [
     'MQTT_HOST', 'MQTT_PORT', 'MQTT_USER', 'MQTT_PASS',
     'MQTT_IN', 'MQTT_IN_FONGMI', 'MQTT_IN_TRIM', 'MQTT_OUT',
     'DOUBAO_API_URL', 'DOUBAO_API_KEY', 'DOUBAO_MODEL',
-    'GO2RTC_BASE', 'GO2RTC_AUTH_USER', 'GO2RTC_AUTH_PASS', 'GW_ACTIVE',
     'ADMIN_TOKEN', 'DEVICE_TOKEN', 'REFRESH_OPEN', 'REFRESH_MIN_INTERVAL',
     'DOCKER_SOCK', 'WAKE_LOCAL',
     '_FG_LOCK', '_DEDUP_LOCK', '_refresh_rtsp_state',

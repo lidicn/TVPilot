@@ -194,28 +194,7 @@ def tool_play_state():
 
     result = {'package': pkg, 'playing': False, 'state': 'stopped', 'channel': None}
 
-    # mytv 在前台时，查询 mytv API（延迟 import 避免循环依赖）
-    if MYTV_PKG in pkg:
-        try:
-            from tvpilot_server import proxy_mytv
-            import json as _json
-            data, ctype, err = proxy_mytv('/api/current')
-            if not err and data:
-                info = _json.loads(data.decode('utf-8'))
-                result['playing'] = info.get('playing', False)
-                ch = info.get('channel', {})
-                result['channel'] = ch.get('name')
-                result['source'] = 'mytv_api'
-                player = info.get('player', {})
-                if player.get('state') == 'playing':
-                    result['state'] = 'playing'
-                elif player.get('state') == 'paused':
-                    result['state'] = 'paused'
-                else:
-                    result['state'] = 'playing' if info.get('playing') else 'stopped'
-                return result, None, None
-        except Exception:
-            pass
+    # 旧 mytv HTTP 代理已随归档链路摘除（见 archive/README.md），此处不再查询。
 
     # 飞牛TV 在前台时，用界面文字判断
     if 'com.trim.tv' in pkg:
