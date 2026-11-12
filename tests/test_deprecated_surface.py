@@ -72,6 +72,32 @@ def test_deprecated_endpoints_return_410():
     assert captured['obj'] == {'ok': False, 'error': 'deprecated', 'see': 'archive/README.md'}
 
 
+def test_legacy_get_paths_return_410():
+    """旧版 8 条 GET 统一 410（与 POST 同包络），不许从路由表消失变 404。"""
+    import tvpilot.routes.deprecated as dep
+
+    expected = {'ok': False, 'error': 'deprecated', 'see': 'archive/README.md'}
+    paths = {'/health', '/channels', '/active', '/zap', '/screenshot',
+             '/fongmi/search', '/keyevent', '/tap'}
+    assert set(dep.DEPRECATED_GET_PATHS) == paths
+    srv = _live_text(ROOT / 'tvpilot_server.py')
+    assert 'handle_deprecated_get' in srv, '主服务未注册旧版 GET 的 410 handler'
+    assert 'GET_HANDLERS' in srv
+
+    class FakeHandler:
+        def __init__(self):
+            self.calls = []
+
+        def _json(self, obj, code=200):
+            self.calls.append((obj, code))
+
+    for path in sorted(paths):
+        f = FakeHandler()
+        assert dep.handle_deprecated_get(f, path, {}) is True, '%s 未被 410 接管' % path
+        assert f.calls == [(expected, 410)], '%s -> %r' % (path, f.calls)
+    assert dep.handle_deprecated_get(FakeHandler(), '/api/health', {}) is False
+
+
 def test_health_has_no_go2rtc_field(monkeypatch):
     """health 面板不再并列两代链路字段；运行期也核一次（全离线）。"""
     src = _live_text(ROOT / 'tvpilot' / 'health.py')

@@ -147,10 +147,12 @@ from tvpilot.routes.remote import handle_remote
 from tvpilot.routes.monitor import handle_monitor_get
 from tvpilot.routes.agent import handle_agent_get, handle_agent_post
 from tvpilot.routes.mcp import handle_mcp_get, handle_mcp_post
+from tvpilot.routes.deprecated import handle_deprecated_get
 from tvpilot.monitor import check_tv_alert, check_health_alert
 
 # ========== 路由表（绞杀者模式）==========
 GET_HANDLERS = [
+    handle_deprecated_get,
     handle_mcp_get,
     handle_remote,
     handle_iptv_routes,
