@@ -143,6 +143,31 @@ finally:
             setattr(_tvpkg, short, original)
 
 
+def _real_blueprint_module():
+    """按文件路径加载真实 tvpilot.blueprint（绕开本文件注入的假模块）。
+
+    以私有名注册进 sys.modules（blueprint.py 的 @dataclass 需要模块可查），
+    不覆盖 tvpilot.blueprint、不改 tvpilot 包属性；顶层仅标准库导入，
+    加载后可用真实 BlueprintRunner + 自定义工具表，不触碰 ADB。
+    """
+    import importlib.util
+    import os
+    import sys
+    name = '_tvpilot_blueprint_under_test'
+    if name in sys.modules:
+        return sys.modules[name]
+    path = os.path.join(os.path.dirname(mcp.__file__), 'blueprint.py')
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        sys.modules.pop(name, None)
+        raise
+    return mod
+
+
 # --------------------------------------------------------------------------- #
 # 测试辅助
 # --------------------------------------------------------------------------- #
@@ -306,19 +331,46 @@ class TestToolBlueprintRun(unittest.TestCase):
         self.assertNotIn('output', step)  # output 被丢弃
 
     def test_blueprint_run_with_params(self):
-        # 测试过时：原断言隐式依赖注入的假 BlueprintRunner（忽略参数直接回 name）。
-        # 现行契约 blueprint.py:778 params=['channel_name']，传 channel 会由真实 runner
-        # 在 :531 明确报「缺少必需参数」。不改成 channel_name（会让单测真跑 zap 步骤碰 ADB），
-        # 改为断言「响应合法且 fail-closed」：成功则 name 正确，缺参则明确报错。
-        resp = _call_tool('tv_blueprint_run', {'name': 'zap_to', 'params': {'channel': 'CCTV1'}})
+        """确定性：现行契约参数 channel_name 带参跑通，zap 工具桩被调用一次。
+
+        AF-PM 11-12 打回「成功/报错两分支都接受」的放宽断言。改用真实
+        BlueprintRunner（按文件加载，绕过本文件注入的假 blueprint 模块），
+        工具表注入 zap 桩，全程不碰 ADB。
+        """
+        from unittest import mock
+        calls = []
+
+        def stub_zap(channel):
+            calls.append(channel)
+            return {'channel': channel, 'channel_no': 21}, None, None
+
+        real_bp = _real_blueprint_module()
+        runner = real_bp.BlueprintRunner(tools={'zap': stub_zap})
+        runner.register_builtins()
+        with mock.patch.object(mcp, '_get_runner', return_value=runner):
+            resp = _call_tool('tv_blueprint_run',
+                              {'name': 'zap_to', 'params': {'channel_name': 'CCTV1'}})
+            data = _content_json(resp)
+        self.assertEqual(data['name'], 'zap_to')
+        self.assertTrue(data['ok'])
+        self.assertEqual(calls, ['CCTV1'], 'zap 工具桩应被带 channel_name 调用一次')
+
+    def test_blueprint_run_missing_param(self):
+        """确定性：zap_to 缺 channel_name 必须精确 fail-closed（独立一条）。"""
+        from unittest import mock
+
+        def stub_zap(channel):
+            raise AssertionError('缺参分支不应执行 zap 步骤')
+
+        real_bp = _real_blueprint_module()
+        runner = real_bp.BlueprintRunner(tools={'zap': stub_zap})
+        runner.register_builtins()
+        with mock.patch.object(mcp, '_get_runner', return_value=runner):
+            resp = _call_tool('tv_blueprint_run', {'name': 'zap_to', 'params': {}})
         text = resp['result']['content'][0]['text']
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError:
-            self.assertIn('缺少必需参数', text)
-            self.assertIn('channel_name', text)
-        else:
-            self.assertEqual(data['name'], 'zap_to')
+        self.assertTrue(resp['result'].get('isError'), '缺参必须 isError')
+        self.assertIn('缺少必需参数', text)
+        self.assertIn('channel_name', text)
 
 
 class TestStdio(unittest.TestCase):
