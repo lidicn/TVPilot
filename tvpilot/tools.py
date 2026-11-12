@@ -499,11 +499,11 @@ def zap_via_adb_digits(channel_no):
                '4': 'KEYCODE_4', '5': 'KEYCODE_5', '6': 'KEYCODE_6', '7': 'KEYCODE_7',
                '8': 'KEYCODE_8', '9': 'KEYCODE_9'}
     try:
-        # 构建批量命令：所有按键用 && 连接，一次 ADB shell 执行
+        # 逐位下发台号，位间 >=0.3s，让 STB 把多位台号收进同一输入窗口；
+        # 0.1s 会被 IPTV 判成两次独立输入，导致 50 -> 5（末位 0 丢失）。
         cmds = [f'input keyevent {key_map[d]}' for d in digits]
         cmds.append('input keyevent KEYCODE_ENTER')
-        # 每个按键间隔 0.2s（用 sleep 命令在设备端等待）
-        batch = " && sleep 0.1 && ".join(cmds)
+        batch = " && sleep 0.35 && ".join(cmds)
         adb_cmd(batch)
         return True, f'输入频道号 {digits}'
     except subprocess.TimeoutExpired:
