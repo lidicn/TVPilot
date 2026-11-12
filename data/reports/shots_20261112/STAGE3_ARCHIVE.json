@@ -1,0 +1,61 @@
+{
+ "BEFORE_CS": {
+  "total_lines": 47,
+  "live_lines": 36,
+  "archive_lines": 0,
+  "other_lines": 11,
+  "other_files": [
+   "patch_cameras_m3u.py",
+   "restore_cameras.py"
+  ],
+  "live_files": [
+   "tvpilot/config.py",
+   "tvpilot/health.py",
+   "tvpilot/legacy.py",
+   "tvpilot/routes/iptv.py",
+   "tvpilot_server.py"
+  ]
+ },
+ "BEFORE_CI": {
+  "total_lines": 66,
+  "live_lines": 54,
+  "archive_lines": 0,
+  "other_lines": 12,
+  "other_files": [
+   "patch_cameras_m3u.py",
+   "restore_cameras.py"
+  ],
+  "live_files": [
+   "tvpilot/config.py",
+   "tvpilot/health.py",
+   "tvpilot/legacy.py",
+   "tvpilot/routes/iptv.py",
+   "tvpilot_server.py"
+  ]
+ },
+ "AFTER_CS": {
+  "total_lines": 60,
+  "live_lines": 0,
+  "archive_lines": 42,
+  "other_lines": 18,
+  "other_files": [
+   "data/reports/shots_20261112/verify_archive_surface.py",
+   "data/reports/shots_20261112/verify_local_server.py",
+   "tests/test_deprecated_surface.py"
+  ],
+  "live_files": []
+ },
+ "AFTER_CI": {
+  "total_lines": 73,
+  "live_lines": 0,
+  "archive_lines": 53,
+  "other_lines": 20,
+  "other_files": [
+   "data/reports/shots_20261112/stage1_isolation_reprobe.py",
+   "data/reports/shots_20261112/verify_archive_surface.py",
+   "data/reports/shots_20261112/verify_local_server.py",
+   "tests/test_deprecated_surface.py"
+  ],
+  "live_files": []
+ }
+}

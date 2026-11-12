@@ -34,6 +34,32 @@
 > `server_rtsp_refresh.py` 是**片段**不是可独立运行模块：它引用 `adb_cmd` / `IPTV_PKG` / `_refresh_rtsp_state` 等主服务全局名，
 > 只做语法编译校验，不 import、不执行。
 
+## 2.1 逐文件文件头说明（AF-PM 11-12 裁定 ② 补齐）
+
+**为何说明集中在本 README、而不写进每个归档文件的头部**：用户 11-12 决定「go2rtc 那套**代码原样保留不删**」，
+`6c0a54b` 的 5 个搬移已验收为 `R100` 纯重命名。若逐个文件插入注释头，会破坏「代码逐字未改」与 R100，
+故三项要素以**集中式文件头说明**落在本节，逐文件一一对应，效果等同、且不触碰历史实现。
+
+| 要素 | 值 |
+|---|---|
+| **来源 commit** | 归档动作 `6c0a54b chore(archive): go2rtc 换台链路隔离归档`；其父提交 `6c0a54b^` 为「归档前」基线。各文件在父提交中的原位置见 §2 表格第 2 列 |
+| **归档原因** | 用户 11-12：「go2rtc 换台那套已停用，现用电信 IPTV + ADB 数字键换台」「隔离出来归档、专门设文件夹存档，以后可能继续开发」；两代链路四态混放、`/api/health` 并列报两代字段，是「分不清」的结构性原因（详见 §1） |
+| **当前主链路替代物** | `tv_zap` → `tvpilot/tools.py:tool_zap` → `channel_no_of()` → `zap_via_adb_digits()` → `adb shell input keyevent KEYCODE_<n> … KEYCODE_ENTER`，前台目标 `com.android.smart.terminal.iptv`；RTSP 刷新端点 `POST /api/iptv/refresh_rtsp` 与 `GET /api/iptv/refresh_status` 均保留为 **`410 Gone`** 显式路标，不再有实现 |
+
+| 归档文件 | 来源 commit 中原位置 | 归档原因（对应链路） | 现用替代物 |
+|---|---|---|---|
+| `server_rtsp_refresh.py` | `tvpilot_server.py:188-401` | RTSP 刷新链（抓 logcat → 改 go2rtc.yaml → docker cp/restart），sock 已拔、流不生效 | `410 Gone` 路标 + 电信 IPTV 直连，无刷新链 |
+| `tvpilot_legacy.py` | `tvpilot/legacy.py` | go2rtc 预热/鉴权 + 旧 mytv HTTP 代理 | ADB 数字键换台，不再经 mytv / go2rtc |
+| `routes_legacy.py` | `tvpilot/routes/legacy.py` | 旧版兼容 GET 分发（`/zap` 等 8 条） | `tvpilot/routes/deprecated.py` 统一 410 包络 |
+| `scripts/check_cameras.sh` | 仓根 | 一次性摄像头流核查 | 无（现用链路不涉及摄像头 M3U） |
+| `scripts/patch_cameras_m3u.py` | 仓根 | 一次性注入摄像头 M3U | 无 |
+| `scripts/restore_cameras.py` | 仓根 | 一次性写回摄像头流 + xiaomi 鉴权 | 无 |
+| `.env.example` | 仓根 `.env.example:17` | `GO2RTC_*` 键占位 | 仓根 `.env.example` 7 键（`DOUBAO_API_KEY` / `MITV_*` / `XIAOMI_*`） |
+
+> 边界：`git grep -in go2rtc -- tvpilot/ tvpilot_server.py` 归档前 **54** 行 → 归档后 **0** 行；
+> 归档后全仓 `*.py` 命中只在 `archive/go2rtc/`（53 行）与防回流闸/证据脚本（20 行，属「指向归档的引用」），
+> 产品活面彻底清零。防回流闸 `tests/test_deprecated_surface.py` 7 例保证不回流。
+
 ## 3. 复活依赖（不含在本目录，需另备）
 
 | 依赖 | 说明 |
