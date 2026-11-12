@@ -492,19 +492,21 @@ def tool_launch_app(package, activity=None):
 # ========== 换台 ==========
 
 def zap_via_adb_digits(channel_no):
-    """降级换台：通过 ADB 数字键直接注入频道号。
-    v2 优化：批量发送所有按键，一次 ADB 连接完成（之前逐个发送，每个约 3s）。"""
+    """降级换台：单次 `input keyevent` 一次下发全部数字键 + ENTER。
+
+    AF-PM 11-12：原实现用 `input keyevent K1 && sleep 0.35 && input keyevent K2 ...`
+    串位，B5 真机同代码同基线仍出现 `50 -> 5`，且耗时翻倍（36.9s vs 14.4s）。
+    `input keyevent` 原生支持一次多键；改成单条命令彻底去掉 sleep 与 `&&` 链，
+    位间不再依赖 toybox 小数 sleep，也不再依赖前一条命令的返回码。
+    """
     digits = str(channel_no)
     key_map = {'0': 'KEYCODE_0', '1': 'KEYCODE_1', '2': 'KEYCODE_2', '3': 'KEYCODE_3',
                '4': 'KEYCODE_4', '5': 'KEYCODE_5', '6': 'KEYCODE_6', '7': 'KEYCODE_7',
                '8': 'KEYCODE_8', '9': 'KEYCODE_9'}
     try:
-        # 逐位下发台号，位间 >=0.3s，让 STB 把多位台号收进同一输入窗口；
-        # 0.1s 会被 IPTV 判成两次独立输入，导致 50 -> 5（末位 0 丢失）。
-        cmds = [f'input keyevent {key_map[d]}' for d in digits]
-        cmds.append('input keyevent KEYCODE_ENTER')
-        batch = " && sleep 0.35 && ".join(cmds)
-        adb_cmd(batch)
+        keys = [key_map[d] for d in digits]
+        keys.append('KEYCODE_ENTER')
+        adb_cmd('input keyevent ' + ' '.join(keys))
         return True, f'输入频道号 {digits}'
     except subprocess.TimeoutExpired:
         return False, '数字键输入超时'

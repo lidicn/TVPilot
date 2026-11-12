@@ -116,12 +116,31 @@ def _make_fake_modules():
     }
 
 
-# 注入假模块后再 import mcp
+# 注入假模块后再 import mcp；用完立即还原 sys.modules 与 tvpilot 包属性。
+# AF-PM 11-12：原实现无清理，后续测试模块级 `from tvpilot import tools as t`
+# 会绑定到假模块（has no attribute 'zap_via_adb_digits'），导致全量 pytest 红。
 _FAKE_MODULES = _make_fake_modules()
+_ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _FAKE_MODULES}
+import tvpilot as _tvpkg  # noqa: E402
+_ORIGINAL_ATTRS = {name: getattr(_tvpkg, name.rsplit('.', 1)[-1], None)
+                   for name in _FAKE_MODULES}
 for name, mod in _FAKE_MODULES.items():
     sys.modules[name] = mod
-
-import tvpilot.mcp as mcp  # noqa: E402
+try:
+    import tvpilot.mcp as mcp  # noqa: E402
+finally:
+    for name, original in _ORIGINAL_MODULES.items():
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+    for name, original in _ORIGINAL_ATTRS.items():
+        short = name.rsplit('.', 1)[-1]
+        if original is None:
+            if hasattr(_tvpkg, short):
+                delattr(_tvpkg, short)
+        else:
+            setattr(_tvpkg, short, original)
 
 
 # --------------------------------------------------------------------------- #

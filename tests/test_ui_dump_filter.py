@@ -7,12 +7,14 @@ visible-to-user="false" 的隐形节点，断言：
 3. el_type 的 region 兜底保留；有 text 的节点仍按 text 归类；
 4. 活代码里不再残留把过滤关掉的 `if True:`。
 
+隔离纪律（AF-PM 11-12）：tvpilot 子模块一律函数内 importlib 导入，
+不在模块级 `from tvpilot import tools`，避免被 test_mcp 的假模块注入污染。
+
 用法：pytest tests/test_ui_dump_filter.py -q
 """
+import importlib
 import subprocess
 from pathlib import Path
-
-from tvpilot import tools as t
 
 _FAKE_XML = '''<?xml version="1.0" encoding="UTF-8"?>
 <hierarchy rotation="0">
@@ -40,6 +42,7 @@ _FAKE_XML = '''<?xml version="1.0" encoding="UTF-8"?>
 
 def test_container_nodes_kept_and_invisible_nodes_dropped(monkeypatch):
     """假 XML 全空 text + 容器 bounds：count>0、无隐形节点、region 兜底在。"""
+    t = importlib.import_module('tvpilot.tools')
     monkeypatch.setattr(
         t, 'adb_shell_output',
         lambda *a, **k: 'UI hierchary dumped to: /sdcard/ui_dump.xml')

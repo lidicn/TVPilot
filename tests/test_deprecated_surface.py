@@ -7,8 +7,12 @@
 4. `archive/**/*.py` 全部可 `py_compile`；
 5. 旧链路实现与旧活符号不得回流到主服务（无 shim）。
 
+隔离纪律（AF-PM 11-12）：tvpilot 子模块一律函数内 importlib 导入，
+不在模块级 `from tvpilot import ...`，避免被 test_mcp 的假模块注入污染。
+
 用法：pytest tests/test_deprecated_surface.py -q
 """
+import importlib
 import py_compile
 from pathlib import Path
 
@@ -59,7 +63,7 @@ def test_deprecated_endpoints_return_410():
     assert "/api/iptv/refresh_status" in routes
 
     # 运行期核一次状态查询端点（GET 侧可离线直接调 handler）
-    import tvpilot.routes.iptv as routes_iptv
+    routes_iptv = importlib.import_module('tvpilot.routes.iptv')
     captured = {}
 
     class FakeHandler:
@@ -74,7 +78,7 @@ def test_deprecated_endpoints_return_410():
 
 def test_legacy_get_paths_return_410():
     """旧版 8 条 GET 统一 410（与 POST 同包络），不许从路由表消失变 404。"""
-    import tvpilot.routes.deprecated as dep
+    dep = importlib.import_module('tvpilot.routes.deprecated')
 
     expected = {'ok': False, 'error': 'deprecated', 'see': 'archive/README.md'}
     paths = {'/health', '/channels', '/active', '/zap', '/screenshot',
@@ -103,7 +107,7 @@ def test_health_has_no_go2rtc_field(monkeypatch):
     src = _live_text(ROOT / 'tvpilot' / 'health.py')
     assert 'go2rtc_creds_configured' not in src
 
-    import tvpilot.health as h
+    h = importlib.import_module('tvpilot.health')
 
     def _offline(*a, **k):
         raise OSError('offline: no device / no network in unit test')
@@ -117,8 +121,8 @@ def test_health_has_no_go2rtc_field(monkeypatch):
 
 def test_channels_count_is_80(tmp_path, monkeypatch):
     """/api/channels 的 count 统一到 80（channels.json 权威口径），旧字段名不再出现。"""
-    import tvpilot.iptv as iptv
-    import tvpilot.routes.iptv as routes_iptv
+    iptv = importlib.import_module('tvpilot.iptv')
+    routes_iptv = importlib.import_module('tvpilot.routes.iptv')
 
     fake_m3u = tmp_path / 'gd_iptv_source.m3u'
     fake_m3u.write_text('#EXTM3U\n#EXTINF:-1 tvg-name="中央一台",中央一台\n', encoding='utf-8')
