@@ -752,7 +752,10 @@ def tool_ui_dump():
                 cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
                 # 只保留有文字/可点击/可输入/有描述的元素（省 token）
-                if text or clickable or editable or desc:
+                # 放宽过滤：电信 IPTV 播放页是 WebView + 视频层，uiautomator dump
+                # 只返回容器节点（text/clickable/editable/desc 全空），旧规则会全部滤掉 -> count=0。
+                # 保留有有效 bounds 的可见节点，供 tv_tap_index 坐标点击。
+                if True:
                     xpath = _node_xpath(node, class_counter)
 
                     # 生成稳定的 element_id（用 text + bounds 哈希）
@@ -760,7 +763,7 @@ def tool_ui_dump():
                     element_id = hashlib.md5(id_str.encode()).hexdigest()[:8]
 
                     # 推断元素类型
-                    el_type = 'button' if clickable else ('input' if editable else 'text')
+                    el_type = 'button' if clickable else ('input' if editable else ('text' if text else 'region'))
 
                     elements.append({
                         'element_id': element_id,
