@@ -27,6 +27,12 @@ def test_offtable_number_rejected_without_any_key_injection(monkeypatch):
         raise AssertionError('表外号不应注入任何按键（纪律 A）')
 
     monkeypatch.setattr(t, 'zap_via_adb_digits', _forbidden_injection)
+
+    def _forbidden_playback_wait(*a, **k):
+        injected.append('playback_wait')
+        raise AssertionError('表外号不应走到播放页探测（纪律 A）')
+
+    monkeypatch.setattr(t, 'wait_for_playback_page', _forbidden_playback_wait)
     monkeypatch.setattr(
         t, 'get_foreground_pkg',
         lambda *a, **k: 'com.android.smart.terminal.iptv')

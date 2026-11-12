@@ -28,6 +28,10 @@ TVREMOTEIME_SVC = f'{TVREMOTEIME_PKG}/.IMEService'
 TVREMOTEIME_ACTION = os.environ.get('TVPILOT_IME_ACTION', 'ADB_INPUT_TEXT')
 
 ZAP_FOREGROUND_TIMEOUT = float(os.environ.get('TVPILOT_ZAP_FG_TIMEOUT', '8'))
+# 播放页守卫（AF-PM 11-12）：fg 是 IPTV 包名不够，冷启动会先停在导航页十几秒，
+# 数字键打在导航页上不生效（B7/B9 真因）。注入前必须轮询到播放页，最多等 20s。
+ZAP_PLAYBACK_TIMEOUT = float(os.environ.get('TVPILOT_ZAP_PLAYBACK_TIMEOUT', '20'))
+ZAP_PLAYBACK_POLL_INTERVAL = float(os.environ.get('TVPILOT_ZAP_PLAYBACK_POLL', '1'))
 _FG_LOCK = threading.Lock()
 
 
@@ -492,25 +496,84 @@ def tool_launch_app(package, activity=None):
 
 # ========== 换台 ==========
 
-def zap_via_adb_digits(channel_no):
-    """降级换台：逐位单键下发数字键，末位之后单独 ENTER（AF-PM 11-12 工程兜底）。
+# 播放页判据（AF-PM 11-12）：轮询 `dumpsys media_session` 的播放态，或
+# `uiautomator dump` 的播放控件。两路都是只读 shell，不注入、不改前台。
+_PLAYBACK_STATE_RE = re.compile(
+    r'state\s*=\s*PLAYING\b|STATE_PLAYING|PlaybackState\s*\{[^}]*state\s*=\s*3\b',
+    re.I)
+# 收紧：只用播放控件词，避免导航页里泛化的 "channel"/"频道" 误判为播放页。
+_PLAYBACK_CTRL_RE = re.compile(
+    r'(?:pause|seek|progress|playback|epg)|(?:播放|暂停|进度|全屏)',
+    re.I)
 
-    实测排除三项：多键语法（input --help）、InputDispatcher 丢弃、键盘源；
-    但 B7 窗口只落一条 `KEYCODE_UNKNOWN (keyCode=0)`，单次多参 `input keyevent`
-    在本机没把参数解析成数字键 ⇒ 不再用单次多参，也不用 `&& sleep` 链。
-    改为每个键一条 `adb_cmd('input keyevent KEYCODE_n')`，**注入前** Python 侧
-    `time.sleep(0.5)` 控制位间，ENTER 为最后一条。丢键根因仍未定位，本实现是工程兜底。
+
+def _playback_page_ready():
+    """只读探测 IPTV 是否已进入播放页（零注入、零前台变更）。
+
+    判据（任一成立即就绪）：
+      ① `dumpsys media_session` 出现播放态（`state=PLAYING` / `STATE_PLAYING`，
+         或 Android `PlaybackState {state=3 ...}`，3 == STATE_PLAYING）；
+      ② `uiautomator dump /dev/tty` 的 UI 树出现播放控件（暂停/进度/全屏/EPG 等）。
+    两者都走 `adb_shell_output` 单次只读；任何异常按「未就绪」处理，不抛进换台流程。
+    拆成独立函数便于离线单测 mock（AF-PM 11-12）。
+    """
+    try:
+        out = adb_shell_output('dumpsys media_session', timeout=8) or ''
+        if _PLAYBACK_STATE_RE.search(out):
+            return True, 'media_session:PLAYING'
+    except Exception:
+        pass
+    try:
+        out = adb_shell_output('uiautomator dump /dev/tty', timeout=10) or ''
+        if _PLAYBACK_CTRL_RE.search(out):
+            return True, 'ui_dump:playback_controls'
+    except Exception:
+        pass
+    return False, 'no_playback_page_signal'
+
+
+def wait_for_playback_page(timeout=ZAP_PLAYBACK_TIMEOUT,
+                           poll_interval=ZAP_PLAYBACK_POLL_INTERVAL):
+    """轮询等 IPTV 进入播放页，最多等 timeout 秒（默认 20s，AF-PM 11-12）。
+
+    全程只读、零注入、零前台变更；等不到返回 `(False, {...})`，由 `tool_zap`
+    fail-closed 转成 `invalid_state`。轮询次数固定（timeout/poll_interval + 1），
+    探测与等待分离，离线单测把 `time.sleep` 打桩即可确定性收敛。
+    """
+    start = time.time()
+    max_polls = max(1, int(timeout / max(poll_interval, 0.001)) + 1)
+    signal = 'not_polled'
+    for poll in range(1, max_polls + 1):
+        ready, signal = _playback_page_ready()
+        if ready:
+            return True, {'ready': True, 'signal': signal,
+                          'wait_s': round(time.time() - start, 2), 'polls': poll}
+        if poll < max_polls:
+            remaining = timeout - (time.time() - start)
+            time.sleep(min(poll_interval, max(0.0, remaining)))
+    return False, {'ready': False, 'signal': signal, 'polls': max_polls,
+                   'timeout_s': timeout, 'wait_s': round(time.time() - start, 2)}
+
+
+def zap_via_adb_digits(channel_no):
+    """恢复 v0.8.1 逐位注入（AF-PM 11-12 判决）：每个数字一条独立 adb_cmd。
+
+    与 `backup/tvpilot_server.0.8.1_20260922.py:1162` 完全一致：
+    循环内 `adb_cmd(f'input keyevent {key_map[d]}')` + `time.sleep(0.15)`，
+    循环后 `time.sleep(0.3)`，再单独 `adb_cmd('input keyevent KEYCODE_ENTER')`。
+    ⛔ 不用 `&&` 链、⛔ 不用单次多参。注入时机由 `tool_zap` 的播放页守卫保证。
     """
     digits = str(channel_no)
     key_map = {'0': 'KEYCODE_0', '1': 'KEYCODE_1', '2': 'KEYCODE_2', '3': 'KEYCODE_3',
                '4': 'KEYCODE_4', '5': 'KEYCODE_5', '6': 'KEYCODE_6', '7': 'KEYCODE_7',
                '8': 'KEYCODE_8', '9': 'KEYCODE_9'}
     try:
-        keys = [key_map[d] for d in digits]
-        keys.append('KEYCODE_ENTER')
-        for key in keys:
-            time.sleep(0.5)
-            adb_cmd(f'input keyevent {key}')
+        for d in digits:
+            adb_cmd(f'input keyevent {key_map[d]}')
+            time.sleep(0.15)
+        time.sleep(0.3)
+        # IPTV 需要按 ENTER 确认换台
+        adb_cmd('input keyevent KEYCODE_ENTER')
         return True, f'输入频道号 {digits}'
     except subprocess.TimeoutExpired:
         return False, '数字键输入超时'
@@ -519,8 +582,9 @@ def zap_via_adb_digits(channel_no):
 
 
 def tool_zap(channel):
-    """ADB 数字键换台工具。
-    F1: 工具级前台守卫——注入前 fg 必须是 IPTV，否则 fail-closed 零注入（不再主动拉前台）；
+    """ADB 数字键换台工具（v0.8.1 逐位注入 + 播放页守卫）。
+    F1: 两级守卫——先断言 fg 是 IPTV，再轮询等播放页（最多 20s）；任何一级不过
+        都 fail-closed 返回 invalid_state、零注入（不再主动拉前台）。
     F2: 数字台号取自单一真源 data/channel_numbers.json（channel_no_of）。"""
     if not channel:
         return None, ERR_INVALID_PARAMETER, 'channel 不能为空'
@@ -556,13 +620,22 @@ def tool_zap(channel):
         return None, ERR_CHANNEL_NO_NUMBER, (
             f'频道 "{name}" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号')
 
-    # 工具级前台守卫（AF-PM 11-12，比修法更重要）：注入前断言 fg 是 IPTV，
-    # 不是就 fail-closed 返回 invalid_state、零注入。B5/B7 都是前台被切走还照打，
-    # 守卫放在工具层才拦得住；不再尝试 ensure_mytv_foreground 主动拉前台。
+    # 守卫第 1 级（AF-PM 11-12）：注入前断言 fg 是 IPTV，不是就 fail-closed 零注入。
+    # B5/B7 都是前台被切走还照打，守卫放在工具层才拦得住；不再主动拉前台。
     fg_before = get_foreground_pkg(force_refresh=True)
     if not fg_before or IPTV_PKG not in fg_before:
         return None, ERR_INVALID_STATE, f'IPTV 不在前台，拒绝注入按键: {fg_before}'
-    fg = {'ok': True, 'action': 'already_foreground_fastpath', 'pkg': fg_before, 'cold_start': False}
+
+    # 守卫第 2 级（AF-PM 11-12 判决，B7/B9 真正的漏洞）：fg 是 IPTV 包名还不够——
+    # 冷启动会先停在导航页十几秒，数字键打在导航页上不生效。轮询判播放页，
+    # 最多等 20s；等不到就 fail-closed 返回 invalid_state、零注入、零前台变更。
+    page_ok, page_info = wait_for_playback_page()
+    if not page_ok:
+        return None, ERR_INVALID_STATE, (
+            f'IPTV 未进入播放页（等满 {page_info.get("timeout_s")}s / '
+            f'{page_info.get("polls")} 次只读探测），拒绝注入按键: {page_info.get("signal")}')
+    fg = {'ok': True, 'action': 'playback_page_ready', 'pkg': fg_before, 'cold_start': False,
+          'playback': page_info}
 
     adb_ok, adb_msg = zap_via_adb_digits(no)
     if not adb_ok:
@@ -1044,8 +1117,8 @@ def tool_batch(actions):
 
 __all__ = [
     'MYTV_ACT', 'IPTV_PKG', 'IPTV_ACT', 'TVREMOTEIME_PKG', 'TVREMOTEIME_SVC', 'TVREMOTEIME_ACTION',
-    'ZAP_FOREGROUND_TIMEOUT', '_FG_LOCK',
-    'ensure_mytv_foreground',
+    'ZAP_FOREGROUND_TIMEOUT', 'ZAP_PLAYBACK_TIMEOUT', 'ZAP_PLAYBACK_POLL_INTERVAL', '_FG_LOCK',
+    'ensure_mytv_foreground', 'wait_for_playback_page',
     'tool_foreground', 'tool_keyevent', 'tool_tap', 'tool_swipe', 'tool_wait',
     'tool_wait_for_foreground',
     'get_current_ime', 'ensure_tvremoteime', 'tool_input_text',
