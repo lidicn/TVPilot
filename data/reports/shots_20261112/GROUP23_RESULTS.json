@@ -1,0 +1,444 @@
+[
+  {
+    "tool": "tv_go_home",
+    "args": {},
+    "expected": "回桌面，前台变为 launcher",
+    "actual": "{\"foreground_before\":\"com.android.smart.terminal.iptv\",\"foreground_after\":\"com.mitv.tvhome\",\"is_home\":true}",
+    "ms": 18173,
+    "isError": false,
+    "evidence": "tv_go_home.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_launch_app",
+    "args": {
+      "package": "com.android.smart.terminal.iptv"
+    },
+    "expected": "拉起 IPTV",
+    "actual": "包未安装: com.android.smart.terminal.iptv",
+    "ms": 180,
+    "isError": true,
+    "evidence": "tv_launch_app.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_force_stop",
+    "args": {
+      "package": "com.tvcam.mytv"
+    },
+    "expected": "强停非前台 App",
+    "actual": "包未安装: com.tvcam.mytv（无需 force-stop）",
+    "ms": 42,
+    "isError": true,
+    "evidence": "tv_force_stop.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_launch_app",
+    "args": {
+      "package": "com.tvcam.mytv"
+    },
+    "expected": "测完拉起",
+    "actual": "启动 com.tvcam.mytv 失败（无 LAUNCHER Activity）: package:com.tvcam.mytv",
+    "ms": 594,
+    "isError": true,
+    "evidence": "tv_launch_app.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_launch_app",
+    "args": {
+      "package": "com.android.smart.terminal.iptv"
+    },
+    "expected": "回 IPTV 前台",
+    "actual": "包未安装: com.android.smart.terminal.iptv",
+    "ms": 2656,
+    "isError": true,
+    "evidence": "tv_launch_app.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "1"
+    },
+    "expected": "换台或明确拒绝",
+    "actual": "mytv 未能切到前台: com.mitv.tvhome",
+    "ms": 10879,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "10"
+    },
+    "expected": "换台或明确拒绝",
+    "actual": "台号 \"10\" 无对应频道",
+    "ms": 29,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "50"
+    },
+    "expected": "换台或明确拒绝",
+    "actual": "mytv 未能切到前台: com.mitv.tvhome",
+    "ms": 8111,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "401"
+    },
+    "expected": "换台或明确拒绝",
+    "actual": "mytv 未能切到前台: com.mitv.tvhome",
+    "ms": 8693,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "第一剧场"
+    },
+    "expected": "换台或明确拒绝",
+    "actual": "频道 \"第一剧场\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 8,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "21"
+    },
+    "expected": "换台或明确拒绝",
+    "actual": "mytv 未能切到前台: com.mitv.tvhome",
+    "ms": 8201,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "延边卫视"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"延边卫视\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 29,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "新疆卫视高清"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"新疆卫视高清\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 16,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "西藏卫视高清"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"西藏卫视高清\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 30,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "宁夏卫视高清"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"宁夏卫视高清\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 16,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "新疆兵团卫视高清"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"新疆兵团卫视高清\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 28,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "第一剧场"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"第一剧场\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 14,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "怀旧剧场"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"怀旧剧场\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 8,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "央视台球"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"央视台球\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 4,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "金鹰卡通"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"金鹰卡通\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 16,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "KAKU少儿"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"KAKU少儿\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 4,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "中国教育一"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"中国教育一\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 7,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "中国教育四"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"中国教育四\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 6,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "中学生频道"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"中学生频道\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 29,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "湖南金鹰纪实"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"湖南金鹰纪实\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 29,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "世界地理"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"世界地理\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 5,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "发现之旅"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"发现之旅\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 26,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "老故事"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"老故事\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 5,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "书画频道"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"书画频道\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 29,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "汽摩频道"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"汽摩频道\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 28,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "女性时尚"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"女性时尚\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 16,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "风云音乐"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"风云音乐\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 27,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "北京卫视4K超高清"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"北京卫视4K超高清\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 15,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "CCTV-4K超高清"
+    },
+    "expected": "应拒绝(无台号)",
+    "actual": "频道 \"CCTV-4K超高清\" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号",
+    "ms": 15,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_input_text",
+    "args": {
+      "text": "abc123"
+    },
+    "expected": "复现输入 bug，不修",
+    "actual": "{\"text\":\"abc123\",\"length\":6,\"method\":\"ascii_input\",\"verified\":null}",
+    "ms": 608,
+    "isError": false,
+    "evidence": "tv_input_text.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_zap",
+    "args": {
+      "channel": "中央一台"
+    },
+    "expected": "回到原频道 21",
+    "actual": "mytv 未能切到前台: com.mitv.tvhome",
+    "ms": 9012,
+    "isError": true,
+    "evidence": "tv_zap.json",
+    "note": ""
+  },
+  {
+    "tool": "tv_launch_app",
+    "args": {
+      "package": "com.android.smart.terminal.iptv"
+    },
+    "expected": "回 IPTV 前台",
+    "actual": "包未安装: com.android.smart.terminal.iptv",
+    "ms": 24,
+    "isError": true,
+    "evidence": "tv_launch_app.json",
+    "note": ""
+  }
+]

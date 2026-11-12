@@ -1,0 +1,116 @@
+[
+  {
+    "kind": "post_proxy",
+    "route": "/api/volume",
+    "purpose": "旧版 mytv 音量设置（代理兜底）",
+    "body": {},
+    "status": 502,
+    "actual": "{\"ok\": false, \"error\": \"mytv_api_error\", \"message\": \"mytv 不可达: <urlopen error [Errno 111] Connection refused>\"}",
+    "evidence": "B2_ROUTE_PROBE.json"
+  },
+  {
+    "kind": "post_proxy",
+    "route": "/api/app/launch",
+    "purpose": "旧版 mytv 启动 App（代理兜底）",
+    "body": {},
+    "status": 502,
+    "actual": "{\"ok\": false, \"error\": \"mytv_api_error\", \"message\": \"mytv 不可达: <urlopen error [Errno 111] Connection refused>\"}",
+    "evidence": "B2_ROUTE_PROBE.json"
+  },
+  {
+    "kind": "post_proxy",
+    "route": "/api/go_home",
+    "purpose": "旧版 mytv 回桌面（代理兜底）",
+    "body": {},
+    "status": 502,
+    "actual": "{\"ok\": false, \"error\": \"mytv_api_error\", \"message\": \"mytv 不可达: <urlopen error [Errno 111] Connection refused>\"}",
+    "evidence": "B2_ROUTE_PROBE.json"
+  },
+  {
+    "kind": "post_proxy",
+    "route": "/api/key",
+    "purpose": "旧版 mytv 遥控器按键（代理兜底）",
+    "body": {},
+    "status": 502,
+    "actual": "{\"ok\": false, \"error\": \"mytv_api_error\", \"message\": \"mytv 不可达: <urlopen error [Errno 111] Connection refused>\"}",
+    "evidence": "B2_ROUTE_PROBE.json"
+  },
+  {
+    "kind": "mcp",
+    "name": "tv_blueprint_record",
+    "args": {
+      "name": "test_p1_probe_1112",
+      "description": "P1 bounded probe 2026-11-12",
+      "steps": [
+        {
+          "name": "home",
+          "tool": "go_home",
+          "args": {}
+        },
+        {
+          "name": "zap_to_21",
+          "tool": "zap",
+          "args": {
+            "channel": "21"
+          },
+          "on_error": "continue"
+        },
+        {
+          "name": "wait_2s",
+          "tool": "wait",
+          "args": {
+            "seconds": 2
+          }
+        }
+      ],
+      "params": {}
+    },
+    "actual": "{\"name\":\"test_p1_probe_1112\",\"steps\":3,\"description\":\"P1 bounded probe 2026-11-12\",\"saved\":true}",
+    "ms": 24,
+    "isError": false,
+    "evidence": "B2_tv_blueprint_record.json"
+  },
+  {
+    "kind": "mcp",
+    "name": "tv_blueprint_run",
+    "args": {
+      "name": "test_p1_probe_1112",
+      "params": {}
+    },
+    "actual": "步骤 \"zap_to_21\" 失败: mytv 未能切到前台: IPTV 启动后未到前台",
+    "ms": 26934,
+    "isError": true,
+    "evidence": "B2_tv_blueprint_run.json"
+  },
+  {
+    "kind": "mcp",
+    "name": "tv_blueprint_delete",
+    "args": {
+      "name": "test_p1_probe_1112"
+    },
+    "actual": "{\"deleted\":\"test_p1_probe_1112\",\"remaining\":[\"go_home\",\"open_settings\",\"open_app\",\"zap_to\",\"zap_to_cctv1\",\"iptv_zap_safe\",\"play_last_history\"]}",
+    "ms": 23,
+    "isError": false,
+    "evidence": "B2_tv_blueprint_delete.json"
+  },
+  {
+    "kind": "mcp",
+    "name": "tv_blueprint_run",
+    "args": {
+      "name": "test_p1_probe_1112",
+      "params": {}
+    },
+    "actual": "未注册的蓝图: \"test_p1_probe_1112\"（已注册: go_home, open_settings, open_app, zap_to, zap_to_cctv1, iptv_zap_safe, play_last_history）；已注册蓝图: ['go_home', 'open_settings', 'open_app', 'zap_to', 'zap_to_cctv1', 'iptv_zap_safe', 'play_last_hist",
+    "ms": 33,
+    "isError": true,
+    "evidence": "B2_tv_blueprint_run.json"
+  },
+  {
+    "kind": "final_state",
+    "fg": "com.android.smart.terminal.iptv",
+    "health": "ok",
+    "online": true,
+    "channel": "中央一台",
+    "no": 21
+  }
+]

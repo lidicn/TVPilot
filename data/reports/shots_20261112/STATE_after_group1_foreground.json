@@ -1,0 +1,1 @@
+{"ok": false, "tool": "foreground", "result": {}, "cost_ms": 4891, "error": "tv_unreachable", "message": "无法获取前台包名，电视可能离线"}

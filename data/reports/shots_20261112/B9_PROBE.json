@@ -1,0 +1,199 @@
+[
+  {
+    "t_s": 1.71,
+    "tag": "BASELINE",
+    "mCurrentFocus": "mCurrentFocus=Window{e7fb4ea u0 com.mitv.tvhome/com.mitv.tvhome.MainActivityUserMode}",
+    "mFocusedApp": "mFocusedApp=Token{c9386f7 ActivityRecord{a0fa2f6 u0 com.mitv.tvhome/.MainActivityUserMode t6}}\r\n  mFocusedApp=AppWindowToken{7f9e964 token=Token{c9386f7 ActivityRecord{a0fa2f6 u0 com.mitv.tvhome/.MainActivityUserMode t6}}}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 2.17,
+    "tag": "AM_START",
+    "rc": 0
+  },
+  {
+    "t_s": 6.95,
+    "tag": "BASELINE_CONFIRM",
+    "fg": "mCurrentFocus=Window{f872c0 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "fg_ok": true,
+    "no": 21
+  },
+  {
+    "t_s": 8.51,
+    "tag": "PROBE1",
+    "key": "KEYCODE_5",
+    "rc": 0,
+    "out": "",
+    "note": "单次注入，随后等 3s"
+  },
+  {
+    "t_s": 13.33,
+    "tag": "READBACK",
+    "probe": "probe1",
+    "readings": [
+      21,
+      21,
+      21
+    ],
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 13.6,
+    "tag": "LOGCAT",
+    "probe": "probe1",
+    "total_lines": 3,
+    "inject_lines": [],
+    "lines": [
+      "11-12 12:27:43.241 D/MitvPhoneWindowManager( 3705): InputDeviceName: 小米蓝牙语音遥控器 KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_BACK, scanCode=158, metaState=0, flags=0x8, repeatCount=0, eventTime=79707519, downTime=79707519, deviceId=15, source=0x301 } in interceptKeyBeforeQueueing()",
+      "<REDACTED:possible-credential-line>",
+      "11-12 12:27:43.360 D/MitvPhoneWindowManager( 3705): InputDeviceName: 小米蓝牙语音遥控器 KeyEvent { action=ACTION_UP, keyCode=KEYCODE_BACK, scanCode=158, metaState=0, flags=0x8, repeatCount=0, eventTime=79707639, downTime=79707519, deviceId=15, source=0x301 } in interceptKeyBeforeQueueing()"
+    ]
+  },
+  {
+    "t_s": 13.6,
+    "tag": "PROBE1_RESULT",
+    "no": 21,
+    "key_landed": false
+  },
+  {
+    "t_s": 14.42,
+    "tag": "PROBE2",
+    "key": "KEYCODE_0",
+    "rc": 0,
+    "out": "",
+    "note": "单次注入，随后等 3s"
+  },
+  {
+    "t_s": 22.3,
+    "tag": "READBACK",
+    "probe": "probe2",
+    "readings": [
+      21,
+      21,
+      21
+    ],
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 25.92,
+    "tag": "LOGCAT",
+    "probe": "probe2",
+    "total_lines": 0,
+    "inject_lines": [],
+    "lines": []
+  },
+  {
+    "t_s": 41.03,
+    "tag": "UI_DUMP",
+    "probe": "probe2",
+    "err": "operation_timeout",
+    "msg": "UI dump 超时"
+  },
+  {
+    "t_s": 41.03,
+    "tag": "PROBE2_RESULT",
+    "no": 21,
+    "zero_key_landed": false
+  },
+  {
+    "t_s": 41.03,
+    "tag": "PROBE3_START",
+    "note": "5 -> sleep 3.0 -> 0 -> sleep 3.0 -> ENTER"
+  },
+  {
+    "t_s": 71.09,
+    "tag": "PROBE3",
+    "steps": [
+      [
+        "KEYCODE_5",
+        -1,
+        "TimeoutExpired(['adb', '-s', '192.168.2.238:5555', 'shell', 'input', 'keyevent', 'KEYCODE_5'], 10)"
+      ],
+      [
+        "KEYCODE_0",
+        0,
+        ""
+      ],
+      [
+        "KEYCODE_ENTER",
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "t_s": 75.98,
+    "tag": "READBACK",
+    "probe": "probe3",
+    "readings": [
+      21,
+      21,
+      21,
+      21,
+      21
+    ],
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 76.82,
+    "tag": "LOGCAT",
+    "probe": "probe3",
+    "total_lines": 0,
+    "inject_lines": [],
+    "lines": []
+  },
+  {
+    "t_s": 76.82,
+    "tag": "PROBE3_RESULT",
+    "no": 21,
+    "name": "中央一台",
+    "expected_50": false
+  },
+  {
+    "t_s": 76.82,
+    "tag": "SUMMARY",
+    "probe1_no": 21,
+    "probe2_no": 21,
+    "probe3_no": 21,
+    "aborted": null
+  },
+  {
+    "t_s": 103.6,
+    "tag": "FINAL_STATE",
+    "fg": "mCurrentFocus=Window{f872c0 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "restore": {
+      "path": "tv_zap(21)",
+      "zap_err": null,
+      "zap_msg": null,
+      "no": 21
+    },
+    "aborted": null,
+    "elapsed_s": 103.6,
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "tag": "PHASE2_FULL_LOGCAT",
+    "note": "零注入零前台变更补取证；logcat -d -v time bytes/errors=replace，22963 行；凭据行整行脱敏",
+    "findings": {
+      "total_lines": 22963,
+      "window_12_27_12_30_key_events": 6,
+      "events": [
+        "12:28:29 KEYCODE_0 DOWN/UP Virtual source=0x101 -> MitvPhoneWindowManager.interceptKeyBeforeQueueing",
+        "12:28:40 KEYCODE_ENTER DOWN/UP Virtual source=0x101",
+        "12:28:55 KEYCODE_1 DOWN/UP injectKeyEvent（来自收尾 tv_zap(21)）"
+      ],
+      "KEYCODE_5_events_in_full_buffer": 0,
+      "physical_KEYCODE_BACK_during_probe": "12:27:43 source=0x301 小米蓝牙语音遥控器",
+      "readonly_recheck_after": "fg=com.mitv.tvhome/.MainActivityUserMode, no=21（FINAL_STATE 时为 IPTV）",
+      "meaning": "探针3 的 0/ENTER 到达系统层但频道未变；探针1 的 5 无系统事件 → 三种判定前提互相打架"
+    },
+    "verdict": "三种判定均不能干净落地；丢键根因仍未定位；每键3秒未获证实且与基线代码（0.1s && 链）不符；不写死 CHANNEL_UP、不改代码、不提交"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "t_s": 0.59,
+    "tag": "BASELINE",
+    "fg": "mCurrentFocus=Window{e7fb4ea u0 com.mitv.tvhome/com.mitv.tvhome.MainActivityUserMode}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 0.59,
+    "tag": "ABORT",
+    "reason": "基线不符（需 IPTV 前台 + Awake + 21），按纪律立刻停"
+  },
+  {
+    "t_s": 9.42,
+    "tag": "FINAL_STATE",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "name": "中央一台",
+    "restore": {
+      "zap_err": null,
+      "zap_msg": null,
+      "no": 21
+    },
+    "aborted": "基线不符（需 IPTV 前台 + Awake + 21），按纪律立刻停",
+    "zap_ok": 0,
+    "zap_reject": 0,
+    "elapsed_s": 9.42
+  }
+]

@@ -1,0 +1,1 @@
+{"ok": true, "source": "iptv_stb_sharedprefs", "source_package": "com.android.smart.terminal.iptv", "source_note": "台号取自电信机顶盒 App SharedPreferences 的 Service/LastchannelID，不是 mytv", "foreground_package": "com.android.smart.terminal.iptv", "mytv_alive": true, "channel": {"name": "中央一台", "no": 21, "program": ""}}

@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":308,"result":{"content":[{"type":"text","text":"uiautomator dump 失败: 无输出（电视可能离线或ADB未连接）"}],"isError":true}}

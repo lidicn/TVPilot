@@ -1,0 +1,206 @@
+[
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/health",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/channels",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/active",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/zap",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/screenshot",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/fongmi/search",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/keyevent",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "deprecated_get(8条旧版兼容)",
+  "path": "/tap",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "remote(PWA)",
+  "path": "/remote",
+  "code": 200,
+  "summary": "non-json(len=28696)"
+ },
+ {
+  "group": "iptv_routes",
+  "path": "/api/iptv/refresh_status",
+  "code": 410,
+  "summary": "{\"ok\":false,\"error\":\"deprecated\",\"see\":\"archive/README.md\"}"
+ },
+ {
+  "group": "iptv_routes",
+  "path": "/iptv/logo?channel=%E4%B8%AD%E5%A4%AE%E4%B8%80%E5%8F%B0",
+  "code": 200,
+  "summary": "non-json(len=1788)"
+ },
+ {
+  "group": "media_get",
+  "path": "/api/audio",
+  "code": 200,
+  "summary": "{\"ok\":false,\"error\":\"tv_unreachable\",\"tool\":\"audio\",\"message\":\"获取音频信息失败: adb shell closed unexpectedly\"}"
+ },
+ {
+  "group": "users_get_all",
+  "path": "/api/users",
+  "code": 200,
+  "summary": "{\"ok\":true}"
+ },
+ {
+  "group": "users_get_all",
+  "path": "/api/history?limit=1",
+  "code": 200,
+  "summary": "{\"ok\":true,\"tool\":\"history\"}"
+ },
+ {
+  "group": "users_get_all",
+  "path": "/api/face/restore",
+  "code": 200,
+  "summary": "{\"ok\":true,\"message\":\"no backup\"}"
+ },
+ {
+  "group": "a11y_get",
+  "path": "/api/a11y/health",
+  "code": 200,
+  "summary": "{\"ok\":false,\"error\":\"app_not_responding\",\"tool\":\"a11y.health\",\"message\":\"无障碍服务不可达: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>\"}"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/health",
+  "code": 200,
+  "summary": "{\"ok\":true,\"status\":\"ok\",\"degraded\":false,\"tool\":\"health\"}"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/foreground",
+  "code": null,
+  "summary": "TimeoutError"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/current",
+  "code": 200,
+  "summary": "{\"ok\":true,\"message\":\"未从电信机顶盒 App 检测到播放中的频道\"}"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/ui_state",
+  "code": 200,
+  "summary": "{\"ok\":false,\"error\":\"tv_unreachable\",\"tool\":\"ui_state\",\"message\":\"无法获取前台包名\"}"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/play_state",
+  "code": 200,
+  "summary": "{\"ok\":false,\"error\":\"tv_unreachable\",\"tool\":\"play_state\",\"message\":\"无法获取前台包名\"}"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/system_state",
+  "code": null,
+  "summary": "TimeoutError"
+ },
+ {
+  "group": "channels",
+  "path": "/api/channels",
+  "code": 200,
+  "summary": "{\"ok\":true,\"count\":80,\"zappable_count\":60,\"m3u_entry_count\":1}"
+ },
+ {
+  "group": "epg_api",
+  "path": "/api/epg",
+  "code": null,
+  "summary": "TimeoutError"
+ },
+ {
+  "group": "monitor_get",
+  "path": "/api/metrics",
+  "code": 200,
+  "summary": "{\"ok\":true,\"tool\":\"metrics\"}"
+ },
+ {
+  "group": "monitor_get",
+  "path": "/api/alerts",
+  "code": 200,
+  "summary": "{\"ok\":true,\"tool\":\"alerts\"}"
+ },
+ {
+  "group": "monitor_get",
+  "path": "/api/monitor/summary",
+  "code": 200,
+  "summary": "{\"ok\":true,\"tool\":\"monitor.summary\"}"
+ },
+ {
+  "group": "agent_get",
+  "path": "/api/blueprint/list",
+  "code": 200,
+  "summary": "{\"ok\":true,\"count\":3}"
+ },
+ {
+  "group": "agent_get",
+  "path": "/api/experience/query?task=stage1",
+  "code": 200,
+  "summary": "{\"ok\":true,\"count\":0}"
+ },
+ {
+  "group": "mcp_get",
+  "path": "/mcp",
+  "code": "HTTP/1.0 200 OK",
+  "summary": "SSE content-type=True"
+ },
+ {
+  "group": "mcp_get",
+  "path": "/mcp",
+  "code": "SKIPPED",
+  "summary": "SSE 心跳长连接，改短连只读状态行见下方"
+ },
+ {
+  "group": "users_get_all",
+  "path": "/api/users/switch",
+  "code": "SKIPPED",
+  "summary": "apply_user_profile 改内存状态，⛔ 改状态类"
+ },
+ {
+  "group": "media_get",
+  "path": "/api/screenshot, /api/screenshot_smart, /api/ocr, /api/analyze, /api/tts",
+  "code": "SKIPPED",
+  "summary": "设备 screencap / 外部 TTS / 外部 LLM，阶段 1 不跑"
+ },
+ {
+  "group": "iptv_routes",
+  "path": "/iptv/source.m3u, /iptv/epg.xml",
+  "code": "SKIPPED",
+  "summary": "正文含 M3U URL 行，凭据零打印"
+ }
+]

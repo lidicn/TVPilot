@@ -1,0 +1,46 @@
+[
+  {
+    "t_s": 2.47,
+    "tag": "BASELINE",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 39.41,
+    "tag": "ZAP",
+    "seq": 1,
+    "input": 50,
+    "read": 5,
+    "name": "宜和购物",
+    "path": "tv_zap",
+    "cost_s": 36.93,
+    "ok": false
+  },
+  {
+    "t_s": 39.41,
+    "tag": "ABORT",
+    "reason": "实读台号 != 输入",
+    "seq": 1,
+    "input": 50,
+    "read": 5
+  },
+  {
+    "t_s": 56.4,
+    "tag": "FINAL_STATE",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 1,
+    "name": "深圳卫视",
+    "restore": {
+      "zap_err": null,
+      "zap_msg": null,
+      "no": 21
+    },
+    "aborted": "实读台号 != 输入",
+    "zap_ok": 0,
+    "zap_reject": 0,
+    "elapsed_s": 56.4
+  }
+]

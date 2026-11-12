@@ -1,0 +1,122 @@
+{
+  "baseline": {
+    "fg": "com.android.smart.terminal.iptv",
+    "wakefulness": "Awake",
+    "channel": "深圳卫视",
+    "no": 1
+  },
+  "zaps": [
+    {
+      "input": "21",
+      "ok": true,
+      "err": null,
+      "msg": null,
+      "returned_no": 21,
+      "read_name": "中央一台",
+      "read_no": 21,
+      "ms": 23727
+    },
+    {
+      "input": "1",
+      "ok": true,
+      "err": null,
+      "msg": null,
+      "returned_no": 1,
+      "read_name": "深圳卫视",
+      "read_no": 1,
+      "ms": 13348
+    },
+    {
+      "input": "10",
+      "ok": false,
+      "err": "invalid_parameter",
+      "msg": "台号 \"10\" 无对应频道",
+      "returned_no": null,
+      "read_name": "深圳卫视",
+      "read_no": 1,
+      "ms": 3425
+    },
+    {
+      "input": "50",
+      "ok": true,
+      "err": null,
+      "msg": null,
+      "returned_no": 50,
+      "read_name": "宜和购物",
+      "read_no": 5,
+      "ms": 17583
+    },
+    {
+      "input": "21",
+      "ok": true,
+      "err": null,
+      "msg": null,
+      "returned_no": 21,
+      "read_name": "中央一台",
+      "read_no": 21,
+      "ms": 16642
+    },
+    {
+      "input": "401",
+      "ok": true,
+      "err": null,
+      "msg": null,
+      "returned_no": 401,
+      "read_name": "广东4K超高清",
+      "read_no": 401,
+      "ms": 18595
+    }
+  ],
+  "tools": {
+    "launch_app": {
+      "err": null,
+      "msg": null,
+      "data": {
+        "package": "com.android.smart.terminal.iptv",
+        "activity": null,
+        "wait_s": 0.5,
+        "foreground": true,
+        "channel": "adb",
+        "launched": true
+      }
+    },
+    "force_stop": {
+      "pkg": "com.tvcam.mytv",
+      "err": null,
+      "msg": null,
+      "data": {
+        "package": "com.tvcam.mytv",
+        "stopped": true
+      }
+    },
+    "relaunch": {
+      "pkg": "com.tvcam.mytv",
+      "err": null,
+      "msg": null
+    },
+    "ui_dump": {
+      "count": 0,
+      "err": null,
+      "msg": null
+    },
+    "get_element": {
+      "skipped": "ui_dump 无元素"
+    },
+    "app_state": {
+      "pid": "30599",
+      "pid_numeric": true,
+      "installed": true
+    }
+  },
+  "final": {
+    "fg": "com.tvcam.mytv",
+    "health": "ok",
+    "online": true,
+    "channel": "中央一台",
+    "no": 21,
+    "problems": []
+  },
+  "notes": [
+    "容器旧镜像对照 tv_app_state: isError=False text={\"package\":\"com.android.smart.terminal.iptv\",\"installed\":false,\"running\":false,\"foreground\":false}"
+  ]
+}

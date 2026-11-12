@@ -1,0 +1,61 @@
+[
+  {
+    "t_s": 0.99,
+    "tag": "BASELINE",
+    "mCurrentFocus": "mCurrentFocus=Window{e7fb4ea u0 com.mitv.tvhome/com.mitv.tvhome.MainActivityUserMode}",
+    "mFocusedApp": "mFocusedApp=Token{c9386f7 ActivityRecord{a0fa2f6 u0 com.mitv.tvhome/.MainActivityUserMode t6}}\r\n  mFocusedApp=AppWindowToken{7f9e964 token=Token{c9386f7 ActivityRecord{a0fa2f6 u0 com.mitv.tvhome/.MainActivityUserMode t6}}}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 1.29,
+    "tag": "AM_START",
+    "rc": 0
+  },
+  {
+    "t_s": 4.53,
+    "tag": "BASELINE_CONFIRM",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "no": 21,
+    "fg_ok": true,
+    "no_ok": true
+  },
+  {
+    "t_s": 38.6,
+    "tag": "ZAP",
+    "seq": 1,
+    "input": 50,
+    "read": 5,
+    "name": "宜和购物",
+    "cost_s": 34.07,
+    "ok": false,
+    "foreground_action": "already_foreground_fastpath"
+  },
+  {
+    "t_s": 38.6,
+    "tag": "ABORT",
+    "reason": "实读台号 != 输入",
+    "seq": 1,
+    "input": 50,
+    "read": 5
+  },
+  {
+    "t_s": 55.99,
+    "tag": "FINAL_STATE",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "restore": {
+      "path": "tv_zap(21)",
+      "zap_err": null,
+      "zap_msg": null,
+      "no": 21,
+      "final_no": 21
+    },
+    "aborted": "实读台号 != 输入",
+    "zap_ok": 0,
+    "elapsed_s": 55.99,
+    "name": "中央一台"
+  }
+]

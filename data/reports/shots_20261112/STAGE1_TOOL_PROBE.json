@@ -1,0 +1,502 @@
+[
+ {
+  "tool": "tv_zap",
+  "mcp_line": 628,
+  "handler": "_t_zap",
+  "impl": [
+   "get_current_channel",
+   "tool_zap"
+  ],
+  "impl_lines": {
+   "tool_zap": 584
+  },
+  "failclosed_returns": 7,
+  "required": [
+   "channel"
+  ],
+  "schema_properties": [
+   "channel"
+  ]
+ },
+ {
+  "tool": "tv_keyevent",
+  "mcp_line": 638,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_keyevent"
+  ],
+  "impl_lines": {
+   "tool_keyevent": 113
+  },
+  "failclosed_returns": 3,
+  "required": [
+   "key"
+  ],
+  "schema_properties": [
+   "key"
+  ]
+ },
+ {
+  "tool": "tv_tap",
+  "mcp_line": 648,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_tap"
+  ],
+  "impl_lines": {
+   "tool_tap": 163
+  },
+  "failclosed_returns": 3,
+  "required": [
+   "x",
+   "y"
+  ],
+  "schema_properties": [
+   "x",
+   "y"
+  ]
+ },
+ {
+  "tool": "tv_tap_index",
+  "mcp_line": 661,
+  "handler": "_t_tap_index",
+  "impl": [
+   "tool_tap_index"
+  ],
+  "impl_lines": {
+   "tool_tap_index": 893
+  },
+  "failclosed_returns": 2,
+  "required": [
+   "index"
+  ],
+  "schema_properties": [
+   "index"
+  ]
+ },
+ {
+  "tool": "tv_swipe",
+  "mcp_line": 671,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_swipe"
+  ],
+  "impl_lines": {
+   "tool_swipe": 178
+  },
+  "failclosed_returns": 2,
+  "required": [
+   "x1",
+   "y1",
+   "x2",
+   "y2"
+  ],
+  "schema_properties": [
+   "x1",
+   "y1",
+   "x2",
+   "y2",
+   "duration_ms"
+  ]
+ },
+ {
+  "tool": "tv_wait",
+  "mcp_line": 688,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_wait"
+  ],
+  "impl_lines": {
+   "tool_wait": 232
+  },
+  "failclosed_returns": 1,
+  "required": [
+   "seconds"
+  ],
+  "schema_properties": [
+   "seconds"
+  ]
+ },
+ {
+  "tool": "tv_wait_for_foreground",
+  "mcp_line": 698,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_wait_for_foreground"
+  ],
+  "impl_lines": {
+   "tool_wait_for_foreground": 243
+  },
+  "failclosed_returns": 2,
+  "required": [
+   "package"
+  ],
+  "schema_properties": [
+   "package",
+   "timeout"
+  ]
+ },
+ {
+  "tool": "tv_input_text",
+  "mcp_line": 711,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_input_text"
+  ],
+  "impl_lines": {
+   "tool_input_text": 286
+  },
+  "failclosed_returns": 3,
+  "required": [
+   "text"
+  ],
+  "schema_properties": [
+   "text"
+  ]
+ },
+ {
+  "tool": "tv_launch_app",
+  "mcp_line": 721,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_launch_app"
+  ],
+  "impl_lines": {
+   "tool_launch_app": 443
+  },
+  "failclosed_returns": 6,
+  "required": [
+   "package"
+  ],
+  "schema_properties": [
+   "package",
+   "activity"
+  ]
+ },
+ {
+  "tool": "tv_go_home",
+  "mcp_line": 734,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_combo_go_home"
+  ],
+  "impl_lines": {
+   "tool_combo_go_home": 419
+  },
+  "failclosed_returns": 1,
+  "required": [],
+  "schema_properties": []
+ },
+ {
+  "tool": "tv_foreground",
+  "mcp_line": 740,
+  "handler": "_t_foreground",
+  "impl": [
+   "get_foreground_pkg"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [],
+  "schema_properties": []
+ },
+ {
+  "tool": "tv_screenshot",
+  "mcp_line": 746,
+  "handler": "_t_screenshot",
+  "impl": [
+   "tool_ui_dump"
+  ],
+  "impl_lines": {
+   "tool_ui_dump": 770
+  },
+  "failclosed_returns": 4,
+  "required": [],
+  "schema_properties": [
+   "width",
+   "inline",
+   "highlight"
+  ]
+ },
+ {
+  "tool": "tv_system_state",
+  "mcp_line": 759,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_system_state"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [],
+  "schema_properties": []
+ },
+ {
+  "tool": "tv_blueprint_run",
+  "mcp_line": 765,
+  "handler": "_t_blueprint_run",
+  "impl": [
+   "_t_blueprint_run"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [
+   "name"
+  ],
+  "schema_properties": [
+   "name",
+   "params"
+  ]
+ },
+ {
+  "tool": "tv_blueprint_record",
+  "mcp_line": 778,
+  "handler": "_t_blueprint_record",
+  "impl": [
+   "_t_blueprint_record"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [
+   "name",
+   "steps"
+  ],
+  "schema_properties": [
+   "name",
+   "description",
+   "steps",
+   "params"
+  ]
+ },
+ {
+  "tool": "tv_blueprint_delete",
+  "mcp_line": 794,
+  "handler": "_t_blueprint_delete",
+  "impl": [
+   "_t_blueprint_delete"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [
+   "name"
+  ],
+  "schema_properties": [
+   "name"
+  ]
+ },
+ {
+  "tool": "tv_list_apps",
+  "mcp_line": 804,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_list_apps"
+  ],
+  "impl_lines": {
+   "tool_list_apps": 667
+  },
+  "failclosed_returns": 2,
+  "required": [],
+  "schema_properties": [
+   "filter"
+  ]
+ },
+ {
+  "tool": "tv_app_state",
+  "mcp_line": 813,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_app_state"
+  ],
+  "impl_lines": {
+   "tool_app_state": 686
+  },
+  "failclosed_returns": 3,
+  "required": [
+   "package"
+  ],
+  "schema_properties": [
+   "package"
+  ]
+ },
+ {
+  "tool": "tv_force_stop",
+  "mcp_line": 823,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_force_stop"
+  ],
+  "impl_lines": {
+   "tool_force_stop": 715
+  },
+  "failclosed_returns": 5,
+  "required": [
+   "package"
+  ],
+  "schema_properties": [
+   "package"
+  ]
+ },
+ {
+  "tool": "tv_ui_dump",
+  "mcp_line": 833,
+  "handler": "_t_ui_dump",
+  "impl": [
+   "tool_ui_dump"
+  ],
+  "impl_lines": {
+   "tool_ui_dump": 770
+  },
+  "failclosed_returns": 4,
+  "required": [],
+  "schema_properties": []
+ },
+ {
+  "tool": "tv_click_text",
+  "mcp_line": 839,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_click_text"
+  ],
+  "impl_lines": {
+   "tool_click_text": 988
+  },
+  "failclosed_returns": 2,
+  "required": [
+   "text"
+  ],
+  "schema_properties": [
+   "text",
+   "exact"
+  ]
+ },
+ {
+  "tool": "tv_tap_xpath",
+  "mcp_line": 852,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_tap_xpath"
+  ],
+  "impl_lines": {
+   "tool_tap_xpath": 930
+  },
+  "failclosed_returns": 2,
+  "required": [
+   "xpath"
+  ],
+  "schema_properties": [
+   "xpath"
+  ]
+ },
+ {
+  "tool": "tv_long_press",
+  "mcp_line": 864,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_long_press"
+  ],
+  "impl_lines": {
+   "tool_long_press": 193
+  },
+  "failclosed_returns": 2,
+  "required": [
+   "x",
+   "y"
+  ],
+  "schema_properties": [
+   "x",
+   "y",
+   "duration_ms"
+  ]
+ },
+ {
+  "tool": "tv_scroll",
+  "mcp_line": 878,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_scroll"
+  ],
+  "impl_lines": {
+   "tool_scroll": 208
+  },
+  "failclosed_returns": 2,
+  "required": [],
+  "schema_properties": [
+   "direction"
+  ]
+ },
+ {
+  "tool": "tv_get_element",
+  "mcp_line": 889,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_get_element"
+  ],
+  "impl_lines": {
+   "tool_get_element": 964
+  },
+  "failclosed_returns": 3,
+  "required": [
+   "index"
+  ],
+  "schema_properties": [
+   "index"
+  ]
+ },
+ {
+  "tool": "tv_batch",
+  "mcp_line": 901,
+  "handler": "<lambda>",
+  "impl": [
+   "tool_batch"
+  ],
+  "impl_lines": {
+   "tool_batch": 1033
+  },
+  "failclosed_returns": 1,
+  "required": [
+   "actions"
+  ],
+  "schema_properties": [
+   "actions"
+  ]
+ },
+ {
+  "tool": "tv_theme_push",
+  "mcp_line": 917,
+  "handler": "_t_theme_push",
+  "impl": [
+   "_t_theme_push"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [],
+  "schema_properties": [
+   "user",
+   "all"
+  ]
+ },
+ {
+  "tool": "tv_theme_list",
+  "mcp_line": 929,
+  "handler": "_t_theme_list",
+  "impl": [
+   "_t_theme_list"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [],
+  "schema_properties": []
+ },
+ {
+  "tool": "tv_theme_status",
+  "mcp_line": 935,
+  "handler": "_t_theme_status",
+  "impl": [
+   "_t_theme_status"
+  ],
+  "impl_lines": {},
+  "failclosed_returns": 0,
+  "required": [],
+  "schema_properties": [
+   "user"
+  ]
+ }
+]

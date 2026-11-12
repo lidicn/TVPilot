@@ -1,0 +1,571 @@
+{
+ "tools": [
+  {
+   "tool": "tv_zap",
+   "mcp_line": 628,
+   "handler": "'handler': _t_zap,"
+  },
+  {
+   "tool": "tv_keyevent",
+   "mcp_line": 638,
+   "handler": "'handler': lambda a: _call(_tools.tool_keyevent, a.get('key')),"
+  },
+  {
+   "tool": "tv_tap",
+   "mcp_line": 648,
+   "handler": "'handler': lambda a: _call(_tools.tool_tap, a.get('x'), a.get('y')),"
+  },
+  {
+   "tool": "tv_tap_index",
+   "mcp_line": 661,
+   "handler": "'handler': _t_tap_index,"
+  },
+  {
+   "tool": "tv_swipe",
+   "mcp_line": 671,
+   "handler": "'handler': lambda a: _call(_tools.tool_swipe, a.get('x1'), a.get('y1'),"
+  },
+  {
+   "tool": "tv_wait",
+   "mcp_line": 688,
+   "handler": "'handler': lambda a: _call(_tools.tool_wait, a.get('seconds', 2)),"
+  },
+  {
+   "tool": "tv_wait_for_foreground",
+   "mcp_line": 698,
+   "handler": "'handler': lambda a: _call(_tools.tool_wait_for_foreground, a.get('package'), a.get('timeout', 10)),"
+  },
+  {
+   "tool": "tv_input_text",
+   "mcp_line": 711,
+   "handler": "'handler': lambda a: _call(_tools.tool_input_text, a.get('text')),"
+  },
+  {
+   "tool": "tv_launch_app",
+   "mcp_line": 721,
+   "handler": "'handler': lambda a: _call(_tools.tool_launch_app, a.get('package'), a.get('activity')),"
+  },
+  {
+   "tool": "tv_go_home",
+   "mcp_line": 734,
+   "handler": "'handler': lambda a: _call(_tools.tool_combo_go_home),"
+  },
+  {
+   "tool": "tv_foreground",
+   "mcp_line": 740,
+   "handler": "'handler': _t_foreground,"
+  },
+  {
+   "tool": "tv_screenshot",
+   "mcp_line": 746,
+   "handler": "'handler': _t_screenshot,"
+  },
+  {
+   "tool": "tv_system_state",
+   "mcp_line": 759,
+   "handler": "'handler': lambda a: _call(_state.tool_system_state),"
+  },
+  {
+   "tool": "tv_blueprint_run",
+   "mcp_line": 765,
+   "handler": "'handler': _t_blueprint_run,"
+  },
+  {
+   "tool": "tv_blueprint_record",
+   "mcp_line": 778,
+   "handler": "'handler': _t_blueprint_record,"
+  },
+  {
+   "tool": "tv_blueprint_delete",
+   "mcp_line": 794,
+   "handler": "'handler': _t_blueprint_delete,"
+  },
+  {
+   "tool": "tv_list_apps",
+   "mcp_line": 804,
+   "handler": "'handler': lambda a: _call(_tools.tool_list_apps, a.get('filter')),"
+  },
+  {
+   "tool": "tv_app_state",
+   "mcp_line": 813,
+   "handler": "'handler': lambda a: _call(_tools.tool_app_state, a.get('package')),"
+  },
+  {
+   "tool": "tv_force_stop",
+   "mcp_line": 823,
+   "handler": "'handler': lambda a: _call(_tools.tool_force_stop, a.get('package')),"
+  },
+  {
+   "tool": "tv_ui_dump",
+   "mcp_line": 833,
+   "handler": "'handler': _t_ui_dump,"
+  },
+  {
+   "tool": "tv_click_text",
+   "mcp_line": 839,
+   "handler": "'handler': lambda a: _call(_tools.tool_click_text, a.get('text'), a.get('exact', False)),"
+  },
+  {
+   "tool": "tv_tap_xpath",
+   "mcp_line": 852,
+   "handler": "'handler': lambda a: _call(_tools.tool_tap_xpath, a.get('xpath')),"
+  },
+  {
+   "tool": "tv_long_press",
+   "mcp_line": 864,
+   "handler": "'handler': lambda a: _call(_tools.tool_long_press, a.get('x'), a.get('y'), a.get('duration_ms', 800)),"
+  },
+  {
+   "tool": "tv_scroll",
+   "mcp_line": 878,
+   "handler": "'handler': lambda a: _call(_tools.tool_scroll, a.get('direction', 'down')),"
+  },
+  {
+   "tool": "tv_get_element",
+   "mcp_line": 889,
+   "handler": "'handler': lambda a: _call(_tools.tool_get_element, a.get('index')),"
+  },
+  {
+   "tool": "tv_batch",
+   "mcp_line": 901,
+   "handler": "'handler': lambda a: _call(_tools.tool_batch, a.get('actions')),"
+  },
+  {
+   "tool": "tv_theme_push",
+   "mcp_line": 917,
+   "handler": "'handler': _t_theme_push,"
+  },
+  {
+   "tool": "tv_theme_list",
+   "mcp_line": 929,
+   "handler": "'handler': _t_theme_list,"
+  },
+  {
+   "tool": "tv_theme_status",
+   "mcp_line": 935,
+   "handler": "'handler': _t_theme_status,"
+  }
+ ],
+ "impl_lines": {
+  "tool_foreground": 105,
+  "tool_keyevent": 113,
+  "tool_tap": 163,
+  "tool_swipe": 178,
+  "tool_long_press": 193,
+  "tool_scroll": 208,
+  "tool_wait": 232,
+  "tool_wait_for_foreground": 243,
+  "tool_input_text": 286,
+  "tool_combo_go_home": 419,
+  "tool_launch_app": 443,
+  "tool_zap": 584,
+  "tool_list_apps": 667,
+  "tool_app_state": 686,
+  "tool_force_stop": 715,
+  "tool_ui_dump": 770,
+  "tool_tap_index": 893,
+  "tool_tap_xpath": 930,
+  "tool_get_element": 964,
+  "tool_click_text": 988,
+  "tool_batch": 1033
+ },
+ "routes": {
+  "__init__.py": [],
+  "a11y.py": [
+   {
+    "line": 21,
+    "path": "/api/a11y/health"
+   },
+   {
+    "line": 29,
+    "path": "/api/a11y/tree"
+   },
+   {
+    "line": 38,
+    "path": "/api/a11y/text"
+   },
+   {
+    "line": 46,
+    "path": "/api/a11y/focus"
+   },
+   {
+    "line": 54,
+    "path": "/api/a11y/dump"
+   },
+   {
+    "line": 69,
+    "path": "/api/a11y/find"
+   },
+   {
+    "line": 75,
+    "path": "/api/a11y/click"
+   },
+   {
+    "line": 81,
+    "path": "/api/a11y/input"
+   },
+   {
+    "line": 87,
+    "path": "/api/a11y/scroll"
+   },
+   {
+    "line": 93,
+    "path": "/api/a11y/key"
+   },
+   {
+    "line": 99,
+    "path": "/api/a11y/tap"
+   },
+   {
+    "line": 105,
+    "path": "/api/a11y/focus"
+   },
+   {
+    "line": 112,
+    "path": "/api/a11y/long_click"
+   },
+   {
+    "line": 118,
+    "path": "/api/a11y/wait"
+   },
+   {
+    "line": 125,
+    "path": "/api/a11y/global"
+   },
+   {
+    "line": 131,
+    "path": "/api/a11y/node"
+   },
+   {
+    "line": 137,
+    "path": "/api/a11y/wait_text"
+   },
+   {
+    "line": 144,
+    "path": "/api/a11y/tap_text"
+   }
+  ],
+  "agent.py": [
+   {
+    "line": 53,
+    "path": "/app/data"
+   },
+   {
+    "line": 114,
+    "path": "/api/blueprint/list"
+   },
+   {
+    "line": 129,
+    "path": "/api/experience/query"
+   },
+   {
+    "line": 150,
+    "path": "/api/blueprint/run"
+   },
+   {
+    "line": 207,
+    "path": "/api/blueprint/register"
+   },
+   {
+    "line": 227,
+    "path": "/api/planner/run"
+   },
+   {
+    "line": 274,
+    "path": "/api/experience/record"
+   },
+   {
+    "line": 294,
+    "path": "/api/experience/prune"
+   }
+  ],
+  "ask.py": [
+   {
+    "line": 14,
+    "path": "/api/ask/listen"
+   },
+   {
+    "line": 28,
+    "path": "/api/ask/stop"
+   },
+   {
+    "line": 38,
+    "path": "/api/ask/beep"
+   }
+  ],
+  "control.py": [
+   {
+    "line": 19,
+    "path": "/api/zap"
+   },
+   {
+    "line": 25,
+    "path": "/api/keyevent"
+   },
+   {
+    "line": 31,
+    "path": "/api/tap"
+   },
+   {
+    "line": 37,
+    "path": "/api/tap_index"
+   },
+   {
+    "line": 43,
+    "path": "/api/swipe"
+   },
+   {
+    "line": 52,
+    "path": "/api/input_text"
+   },
+   {
+    "line": 58,
+    "path": "/api/launch_app"
+   },
+   {
+    "line": 66,
+    "path": "/api/wait"
+   },
+   {
+    "line": 72,
+    "path": "/api/combo/go_home"
+   },
+   {
+    "line": 78,
+    "path": "/api/combo/trim_search_play"
+   }
+  ],
+  "deprecated.py": [
+   {
+    "line": 11,
+    "path": "/health"
+   },
+   {
+    "line": 11,
+    "path": "/channels"
+   },
+   {
+    "line": 11,
+    "path": "/active"
+   },
+   {
+    "line": 11,
+    "path": "/zap"
+   },
+   {
+    "line": 11,
+    "path": "/screenshot"
+   },
+   {
+    "line": 12,
+    "path": "/fongmi/search"
+   },
+   {
+    "line": 12,
+    "path": "/keyevent"
+   },
+   {
+    "line": 12,
+    "path": "/tap"
+   }
+  ],
+  "iptv.py": [
+   {
+    "line": 18,
+    "path": "/api/iptv/refresh_status"
+   },
+   {
+    "line": 24,
+    "path": "/iptv/source.m3u"
+   },
+   {
+    "line": 24,
+    "path": "/iptv/source.m3u8"
+   },
+   {
+    "line": 24,
+    "path": "/iptv.m3u"
+   },
+   {
+    "line": 24,
+    "path": "/iptv.m3u8"
+   },
+   {
+    "line": 41,
+    "path": "/iptv/epg.xml"
+   },
+   {
+    "line": 41,
+    "path": "/iptv/epg"
+   },
+   {
+    "line": 41,
+    "path": "/epg.xml"
+   },
+   {
+    "line": 57,
+    "path": "/iptv/logo"
+   },
+   {
+    "line": 75,
+    "path": "/iptv/source_direct.m3u"
+   },
+   {
+    "line": 75,
+    "path": "/iptv/direct.m3u"
+   },
+   {
+    "line": 98,
+    "path": "/api/channels"
+   },
+   {
+    "line": 155,
+    "path": "/api/epg"
+   }
+  ],
+  "mcp.py": [
+   {
+    "line": 18,
+    "path": "/mcp"
+   },
+   {
+    "line": 39,
+    "path": "/mcp"
+   }
+  ],
+  "media.py": [
+   {
+    "line": 36,
+    "path": "/api/tts"
+   },
+   {
+    "line": 60,
+    "path": "/api/screenshot"
+   },
+   {
+    "line": 79,
+    "path": "/api/analyze"
+   },
+   {
+    "line": 92,
+    "path": "/api/ocr"
+   },
+   {
+    "line": 104,
+    "path": "/api/screenshot_smart"
+   },
+   {
+    "line": 124,
+    "path": "/api/audio"
+   },
+   {
+    "line": 153,
+    "path": "/api/screenshot"
+   },
+   {
+    "line": 169,
+    "path": "/api/audio/volume"
+   },
+   {
+    "line": 174,
+    "path": "/api/audio/mute"
+   },
+   {
+    "line": 179,
+    "path": "/api/audio/volume_up"
+   },
+   {
+    "line": 184,
+    "path": "/api/audio/volume_down"
+   }
+  ],
+  "monitor.py": [
+   {
+    "line": 11,
+    "path": "/api/metrics"
+   },
+   {
+    "line": 23,
+    "path": "/api/alerts"
+   },
+   {
+    "line": 38,
+    "path": "/api/monitor/summary"
+   }
+  ],
+  "remote.py": [
+   {
+    "line": 10,
+    "path": "/remote"
+   },
+   {
+    "line": 10,
+    "path": "/remote/"
+   },
+   {
+    "line": 15,
+    "path": "/remote-static/"
+   },
+   {
+    "line": 16,
+    "path": "/remote-static/"
+   }
+  ],
+  "state.py": [
+   {
+    "line": 24,
+    "path": "/api/health"
+   },
+   {
+    "line": 37,
+    "path": "/api/foreground"
+   },
+   {
+    "line": 45,
+    "path": "/api/current"
+   },
+   {
+    "line": 101,
+    "path": "/api/ui_state"
+   },
+   {
+    "line": 112,
+    "path": "/api/play_state"
+   },
+   {
+    "line": 123,
+    "path": "/api/system_state"
+   }
+  ],
+  "users.py": [
+   {
+    "line": 11,
+    "path": "/app/data"
+   },
+   {
+    "line": 16,
+    "path": "/api/users"
+   },
+   {
+    "line": 26,
+    "path": "/api/users/switch"
+   },
+   {
+    "line": 36,
+    "path": "/api/face/restore"
+   },
+   {
+    "line": 54,
+    "path": "/api/history"
+   },
+   {
+    "line": 82,
+    "path": "/api/users"
+   },
+   {
+    "line": 97,
+    "path": "/api/face/backup"
+   }
+  ]
+ }
+}

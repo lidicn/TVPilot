@@ -1,0 +1,58 @@
+[
+ {
+  "group": "state_routes",
+  "path": "/api/foreground",
+  "code": 200,
+  "summary": "len=153",
+  "note": "ADB 不可达 -> tv_unreachable 包络（长超时）"
+ },
+ {
+  "group": "state_routes",
+  "path": "/api/system_state",
+  "code": 200,
+  "summary": "len=308",
+  "note": "聚合状态（长超时）"
+ },
+ {
+  "group": "epg_api",
+  "path": "/api/epg",
+  "code": 200,
+  "summary": "len=3156",
+  "note": "EPG 今日节目单（长超时）"
+ },
+ {
+  "group": "iptv_routes",
+  "path": "/iptv/source.m3u",
+  "code": 200,
+  "summary": "len=198",
+  "note": "M3U 代理：只记 code+len，正文含 URL 不打印"
+ },
+ {
+  "group": "iptv_routes",
+  "path": "/iptv/epg.xml",
+  "code": 200,
+  "summary": "len=1112743",
+  "note": "EPG XML 代理：只记 code+len"
+ },
+ {
+  "group": "monitor_get",
+  "path": "/api/metrics?minutes=abc",
+  "code": 400,
+  "summary": "{\"ok\":false,\"error\":\"invalid_parameter\",\"message\":\"minutes 必须是整数\"}",
+  "note": "fail-closed：非法 minutes -> 400"
+ },
+ {
+  "group": "monitor_get",
+  "path": "/api/alerts?limit=abc",
+  "code": 400,
+  "summary": "{\"ok\":false,\"error\":\"invalid_parameter\",\"message\":\"limit 必须是整数\"}",
+  "note": "fail-closed：非法 limit -> 400"
+ },
+ {
+  "group": "iptv_routes",
+  "path": "/iptv/logo",
+  "code": 400,
+  "summary": "{\"ok\":false,\"error\":\"channel required\"}",
+  "note": "fail-closed：缺 channel -> 400"
+ }
+]

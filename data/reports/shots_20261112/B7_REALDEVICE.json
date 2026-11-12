@@ -1,0 +1,59 @@
+[
+  {
+    "t_s": 1.03,
+    "tag": "BASELINE",
+    "mCurrentFocus": "mCurrentFocus=Window{48064 u0 my_test}",
+    "mFocusedApp": "mFocusedApp=Token{993df6c ActivityRecord{ef2f01f u0 com.xiaomi.tv.gallery/.view.ScreenSaverActivity t20}}\r\n  mFocusedApp=AppWindowToken{b913935 token=Token{993df6c ActivityRecord{ef2f01f u0 com.xiaomi.tv.gallery/.view.ScreenSaverActivity t20}}}",
+    "my_test_window": "mFocusedWindow=Window{48064 u0 my_test}\r\n    mTopFullscreenOpaqueWindowState=Window{48064 u0 my_test}\r\n    mTopFullscreenOpaqueOrDimmingWindowState=Window{48064 u0 my_test}\r\n      Window #5: WindowStateAnimator{4ab0e01 my_test}\r\n            windows=[Window{48064 u0 my_test}]\r\n  Window #8 Window{48064 u0 my_test}:\r\n    WindowStateAnimator{4ab0e01 my_test}:\r\n  mCurrentFocus=Window{48064 u0 my_test}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "name": "中央一台"
+  },
+  {
+    "t_s": 1.31,
+    "tag": "AM_START",
+    "rc": 0
+  },
+  {
+    "t_s": 4.57,
+    "tag": "BASELINE_CONFIRM",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "no": 21,
+    "fg_ok": true,
+    "no_ok": true
+  },
+  {
+    "t_s": 19.86,
+    "tag": "ZAP",
+    "seq": 1,
+    "input": 50,
+    "read": 21,
+    "name": "中央一台",
+    "cost_s": 15.29,
+    "ok": false
+  },
+  {
+    "t_s": 19.86,
+    "tag": "ABORT",
+    "reason": "实读台号 != 输入",
+    "seq": 1,
+    "input": 50,
+    "read": 21
+  },
+  {
+    "t_s": 51.94,
+    "tag": "FINAL_STATE",
+    "fg": "mCurrentFocus=Window{cbee730 u0 com.android.smart.terminal.iptv/com.amt.app.IPTVActivity}",
+    "wake": "mWakefulness=Awake\r\n  mWakefulnessChanging=false",
+    "no": 21,
+    "restore": {
+      "zap_err": null,
+      "zap_msg": null,
+      "no": 21
+    },
+    "aborted": "实读台号 != 输入",
+    "zap_ok": 0,
+    "elapsed_s": 51.94,
+    "name": "中央一台"
+  }
+]

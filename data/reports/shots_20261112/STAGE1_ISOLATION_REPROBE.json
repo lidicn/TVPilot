@@ -1,0 +1,163 @@
+{
+ "adb_host": "127.0.0.1:1",
+ "adb": [
+  "adb",
+  "-s",
+  "127.0.0.1:1"
+ ],
+ "adb_calls_count": 40,
+ "adb_calls_all_target_127": false,
+ "connect_log_count": 28,
+ "violations": [],
+ "hardcoded_patched": [
+  {
+   "module": "tvpilot.routes.ask",
+   "attr": "ARC_BASE",
+   "old": "http://192.168.2.238:8080",
+   "new": "http://127.0.0.1:1",
+   "note": "routes/ask.py:8 硬编码，仅 POST /api/ask/* 用"
+  },
+  {
+   "module": "tvpilot.iptv",
+   "attr": "IPTV_UPSTREAM",
+   "old": "http://192.168.2.200:8666/",
+   "new": "http://127.0.0.1:1/",
+   "note": "iptv.py:15 硬编码（NAS 侧 8666）"
+  },
+  {
+   "module": "tvpilot.logos",
+   "attr": "TVPILOT_LOGO_BASE",
+   "old": "http://192.168.2.200:8090/iptv/logo",
+   "new": "http://127.0.0.1:1/iptv/logo",
+   "note": "logos.py:17 硬编码"
+  },
+  {
+   "module": "tvpilot.mcp",
+   "attr": "_SHOT_BASE",
+   "old": "http://127.0.0.1:1",
+   "new": "http://127.0.0.1:1/shots",
+   "note": "mcp.py:74 默认值"
+  },
+  {
+   "module": "tvpilot.vision",
+   "attr": "DOUBAO_API_URL",
+   "old": "http://127.0.0.1:1",
+   "new": "http://127.0.0.1:1/",
+   "note": "vision.py:21 默认值"
+  },
+  {
+   "module": "tvpilot.epg",
+   "attr": "EPG_UPSTREAM",
+   "old": "http://epg.51zmt.top:8000/e.xml",
+   "new": "http://127.0.0.1:1/e.xml",
+   "note": "epg.py:10 硬编码公网 51zmt EPG 上游（首轮重拨测拦截到的 2 条外连）"
+  },
+  {
+   "module": "tvpilot.health",
+   "attr": "MYTV_HTTP",
+   "old": "http://127.0.0.1:1",
+   "new": "http://127.0.0.1:1",
+   "note": "health.py:15 默认值"
+  },
+  {
+   "module": "tvpilot.config",
+   "attr": "ARC_BASE",
+   "old": "http://127.0.0.1:1",
+   "new": "http://127.0.0.1:1",
+   "note": "config.py:35 默认值"
+  },
+  {
+   "module": "tvpilot_server",
+   "attr": "ARC_BASE",
+   "old": "http://127.0.0.1:1",
+   "new": "http://127.0.0.1:1",
+   "note": "tvpilot_server.py 模块全局 ARC_BASE"
+  },
+  {
+   "module": "tvpilot_server",
+   "attr": "A11Y_HTTP",
+   "old": "http://127.0.0.1:1",
+   "new": "http://127.0.0.1:1",
+   "note": "tvpilot_server.py:192 模块全局 A11Y_HTTP"
+  }
+ ],
+ "home_injection_sites": [
+  "tvpilot/tools.py:64 ensure_mytv_foreground -> adb_cmd(input keyevent KEYCODE_HOME)",
+  "tvpilot/tools.py:75 ensure_mytv_foreground -> adb_cmd(am start -n IPTV_ACT)",
+  "tvpilot/tools.py:423 tool_combo_go_home -> adb_cmd(input keyevent KEYCODE_HOME)",
+  "tvpilot/blueprint.py:653 注册 ensure_mytv_foreground 为蓝图可用工具（仅注册，非执行）",
+  "tvpilot/blueprint.py:734-737 go_home 内置蓝图（KEYCODE_HOME 组合动作）",
+  "tvpilot/routes/agent.py:74 内置蓝图定义含 KEYCODE_HOME 步骤",
+  "tvpilot/experience.py:550-551 经验回放定义含 KEYCODE_HOME",
+  "tvpilot/planner.py:125 意图映射 主页/桌面 -> KEYCODE_HOME",
+  "tvpilot/tools.py:40 _ensure_mytv_foreground_inner 当前 tool_zap 已不调用（8ec3b4c fail-closed）",
+  "tvpilot_server.py:241 heal_loop 每 60s -> rearm_tv(:230) 不含 HOME，且本进程未启动"
+ ],
+ "routes": [
+  {
+   "path": "/api/health",
+   "code": 200,
+   "len_or_err": 425
+  },
+  {
+   "path": "/api/foreground",
+   "code": 200,
+   "len_or_err": 153
+  },
+  {
+   "path": "/api/current",
+   "code": 200,
+   "len_or_err": 341
+  },
+  {
+   "path": "/api/ui_state",
+   "code": 200,
+   "len_or_err": 130
+  },
+  {
+   "path": "/api/play_state",
+   "code": 200,
+   "len_or_err": 132
+  },
+  {
+   "path": "/api/system_state",
+   "code": 200,
+   "len_or_err": 308
+  },
+  {
+   "path": "/api/monitor/summary",
+   "code": 200,
+   "len_or_err": 470
+  },
+  {
+   "path": "/api/a11y/health",
+   "code": 200,
+   "len_or_err": 223
+  },
+  {
+   "path": "/api/audio",
+   "code": 200,
+   "len_or_err": 157
+  },
+  {
+   "path": "/api/channels",
+   "code": 200,
+   "len_or_err": 474
+  },
+  {
+   "path": "/api/blueprint/list",
+   "code": 200,
+   "len_or_err": 362
+  },
+  {
+   "path": "/api/epg",
+   "code": 200,
+   "len_or_err": 3156
+  },
+  {
+   "path": "/iptv/logo?channel=%E4%B8%AD%E5%A4%AE%E4%B8%80%E5%8F%B0",
+   "code": 200,
+   "len_or_err": 1901
+  }
+ ]
+}

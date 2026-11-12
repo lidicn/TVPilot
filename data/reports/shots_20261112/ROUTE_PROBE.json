@@ -1,0 +1,297 @@
+{
+  "restore": [
+    {
+      "try": 1,
+      "channel": "中央一台",
+      "no": 21
+    }
+  ],
+  "routes": [
+    {
+      "route": "/api/health",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"health\", \"result\": {\"tvpilot_version\": \"0.9.0\", \"tv_online\": true, \"adb_connected\": true, \"foregro"
+    },
+    {
+      "route": "/api/health?strict=1",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"health\", \"result\": {\"tvpilot_version\": \"0.9.0\", \"tv_online\": true, \"adb_connected\": true, \"foregro"
+    },
+    {
+      "route": "/api/channels",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"count\": 97, \"zappable_count\": 60, \"go2rtc_count\": 80, \"count_semantics\": {\"count\": \"电信抓包 M3U 频道总数（/api/cha"
+    },
+    {
+      "route": "/api/epg",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"channel\": \"\", \"programs\": []}"
+    },
+    {
+      "route": "/api/iptv/refresh_status",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"running\": false, \"last_success\": null, \"message\": \"\"}"
+    },
+    {
+      "route": "/api/metrics",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"metrics\", \"result\": {\"window_minutes\": 60, \"total_calls\": 3, \"total_success\": 2, \"total_fail\": 1, "
+    },
+    {
+      "route": "/api/alerts",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"alerts\", \"result\": {\"count\": 50, \"alerts\": [{\"ts\": \"2026-11-03T12:06:05+00:00\", \"ts_epoch\": 179370"
+    },
+    {
+      "route": "/api/monitor/summary",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"monitor.summary\", \"result\": {\"health\": {\"tvpilot_version\": \"0.9.0\", \"tv_online\": true, \"adb_connec"
+    },
+    {
+      "route": "/api/history",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"history\", \"result\": {\"count\": 50, \"records\": [{\"ts\": \"2026-09-24T00:58:11+00:00\", \"ts_epoch\": 1790"
+    },
+    {
+      "route": "/api/users",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"current_user\": \"default\", \"users\": [\"default\", \"爸爸\", \"妈妈\"], \"profiles\": {\"default\": {\"favorites\": [], \"dis"
+    },
+    {
+      "route": "/api/blueprint/list",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"blueprints\": [{\"name\": \"go_home\", \"description\": \"回到电视桌面\", \"steps_count\": 2, \"params\": []}, {\"name\": \"zap_"
+    },
+    {
+      "route": "/api/experience/query",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"task\": \"\", \"results\": [{\"exp_id\": \"88d84156148643a5875f7860e8b3fe16\", \"task\": \"测试任务\", \"steps\": [{\"tool\": \""
+    },
+    {
+      "route": "/api/a11y/health",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"tool\": \"a11y.health\", \"result\": {\"ok\": true, \"a11y_connected\": true, \"port\": 8081, \"ts\": 1794440713551}, \""
+    },
+    {
+      "route": "/api/a11y/tree",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"a11y.tree\", \"result\": {\"tree\": {\"class\": \"android.widget.FrameLayout\", \"clickable\": false, \"focusa"
+    },
+    {
+      "route": "/api/a11y/text",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"a11y.text\", \"result\": {\"count\": 0, \"texts\": [], \"package\": \"com.android.smart.terminal.iptv\"}, \"co"
+    },
+    {
+      "route": "/api/a11y/focus",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"a11y.focus\", \"result\": {\"content_description\": \"首页-深圳广信-时尚EPG3.0\", \"class\": \"android.view.View\", \""
+    },
+    {
+      "route": "/api/audio",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"audio\", \"result\": {\"volume\": null, \"max\": 100, \"muted\": false, \"output_device\": \"unknown\", \"speake"
+    },
+    {
+      "route": "/api/audio/volume",
+      "status": 404,
+      "device": "yes",
+      "body": "{\"ok\": false, \"error\": \"not found\", \"path\": \"/api/audio/volume\"}"
+    },
+    {
+      "route": "/api/audio/volume_up",
+      "status": 404,
+      "device": "yes",
+      "body": "{\"ok\": false, \"error\": \"not found\", \"path\": \"/api/audio/volume_up\"}"
+    },
+    {
+      "route": "/api/audio/volume_down",
+      "status": 404,
+      "device": "yes",
+      "body": "{\"ok\": false, \"error\": \"not found\", \"path\": \"/api/audio/volume_down\"}"
+    },
+    {
+      "route": "/api/audio/mute",
+      "status": 404,
+      "device": "yes",
+      "body": "{\"ok\": false, \"error\": \"not found\", \"path\": \"/api/audio/mute\"}"
+    },
+    {
+      "route": "/api/foreground",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"foreground\", \"result\": {\"package\": \"com.android.smart.terminal.iptv\"}, \"cost_ms\": 4020, \"error\": n"
+    },
+    {
+      "route": "/api/current",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"source\": \"iptv_stb_sharedprefs\", \"source_package\": \"com.android.smart.terminal.iptv\", \"source_note\": \"台号取自"
+    },
+    {
+      "route": "/api/ui_state",
+      "status": null,
+      "device": "yes",
+      "body": "TimeoutError:timed out"
+    },
+    {
+      "route": "/api/play_state",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"play_state\", \"result\": {\"package\": \"com.android.smart.terminal.iptv\", \"playing\": true, \"state\": \"p"
+    },
+    {
+      "route": "/api/system_state",
+      "status": null,
+      "device": "yes",
+      "body": "TimeoutError:timed out"
+    },
+    {
+      "route": "/api/screenshot",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"screenshot\", \"result\": {\"bytes\": 194137, \"image_base64\": \"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH"
+    },
+    {
+      "route": "/api/screenshot?fmt=json",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"screenshot\", \"result\": {\"bytes\": 158404, \"image_base64\": \"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH"
+    },
+    {
+      "route": "/api/screenshot_smart",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"ok\": true, \"tool\": \"screenshot_smart\", \"result\": {\"image_base64\": \"iVBORw0KGgoAAAANSUhEUgAAAeAAAAEOCAIAAADe+FMwAAEAAEl"
+    },
+    {
+      "route": "/api/ocr",
+      "status": null,
+      "device": "yes",
+      "body": "TimeoutError:timed out"
+    },
+    {
+      "route": "/api/analyze",
+      "status": 500,
+      "device": "yes",
+      "body": "{\"ok\": false, \"error\": \"KeyError('png_base64')\"}"
+    },
+    {
+      "route": "/api/tts",
+      "status": 400,
+      "device": "no",
+      "body": "{\"ok\": false, \"error\": \"text required\"}"
+    },
+    {
+      "route": "/health",
+      "status": 200,
+      "device": "no",
+      "body": "{\"ok\": true, \"channels\": 80, \"tvpilot\": \"0.9.0\"}"
+    },
+    {
+      "route": "/channels",
+      "status": 200,
+      "device": "no",
+      "body": "{\"count\": 80, \"channels\": [\"深圳卫视\", \"深圳都市\", \"深圳电视剧\", \"宜和购物\", \"中央一台\", \"中央二台\", \"中央三台\", \"中央四台\", \"中央五台\", \"中央五台+\", \"中央六台\", \"中央"
+    },
+    {
+      "route": "/active",
+      "status": 200,
+      "device": "yes",
+      "body": "{\"active\": null}"
+    },
+    {
+      "route": "/fongmi/search",
+      "status": null,
+      "device": "no",
+      "body": "TimeoutError:timed out"
+    },
+    {
+      "route": "/iptv/source.m3u",
+      "status": 200,
+      "device": "no",
+      "body": "﻿#EXTM3U x-tvg-url=\"https://raw.githubusercontent.com/fanmingming/live/main/e.xml\"\r \r #EXTINF: tvg-logo=\"http://192.168."
+    },
+    {
+      "route": "/iptv/source.m3u8",
+      "status": 200,
+      "device": "no",
+      "body": "﻿#EXTM3U x-tvg-url=\"https://raw.githubusercontent.com/fanmingming/live/main/e.xml\"\r \r #EXTINF: tvg-logo=\"http://192.168."
+    },
+    {
+      "route": "/iptv.m3u",
+      "status": 200,
+      "device": "no",
+      "body": "﻿#EXTM3U x-tvg-url=\"https://raw.githubusercontent.com/fanmingming/live/main/e.xml\"\r \r #EXTINF: tvg-logo=\"http://192.168."
+    },
+    {
+      "route": "/iptv/epg.xml",
+      "status": 200,
+      "device": "no",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <!DOCTYPE tv SYSTEM \"xmltv.dtd\"> <tv generator-info-name=\"老张的EPG\" generator-info-"
+    },
+    {
+      "route": "/iptv/epg",
+      "status": 200,
+      "device": "no",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <!DOCTYPE tv SYSTEM \"xmltv.dtd\"> <tv generator-info-name=\"老张的EPG\" generator-info-"
+    },
+    {
+      "route": "/epg.xml",
+      "status": 200,
+      "device": "no",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <!DOCTYPE tv SYSTEM \"xmltv.dtd\"> <tv generator-info-name=\"老张的EPG\" generator-info-"
+    },
+    {
+      "route": "/iptv/logo",
+      "status": 400,
+      "device": "no",
+      "body": "{\"ok\": false, \"error\": \"channel required\"}"
+    },
+    {
+      "route": "/iptv/source_direct.m3u",
+      "status": 200,
+      "device": "no",
+      "body": "#EXTM3U\r #EXTINF:-1 tvg-logo=\"http://192.168.2.200:8090/iptv/logo?channel=%E6%B7%B1%E5%9C%B3%E5%8D%AB%E8%A7%86\" tvg-name"
+    },
+    {
+      "route": "/iptv/direct.m3u",
+      "status": 200,
+      "device": "no",
+      "body": "#EXTM3U\r #EXTINF:-1 tvg-logo=\"http://192.168.2.200:8090/iptv/logo?channel=%E6%B7%B1%E5%9C%B3%E5%8D%AB%E8%A7%86\" tvg-name"
+    },
+    {
+      "route": "/remote-static/shots/",
+      "status": 404,
+      "device": "no",
+      "body": "{\"ok\": false, \"error\": \"not found: shots/\"}"
+    },
+    {
+      "route": "/",
+      "status": 404,
+      "device": "no",
+      "body": "{\"ok\": false, \"error\": \"not found\", \"path\": \"/\"}"
+    }
+  ],
+  "final_health": {
+    "status": 200,
+    "body": "{\"ok\": true, \"tool\": \"health\", \"result\": {\"tvpilot_version\": \"0.9.0\", \"tv_online\": true, \"adb_connected\": true, \"foregro"
+  }
+}
