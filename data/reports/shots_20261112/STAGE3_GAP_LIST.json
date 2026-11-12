@@ -1,0 +1,215 @@
+{
+ "structure": {
+  "channels_json_keys": 80,
+  "channels_json_value_types": [
+   "str"
+  ],
+  "channel_numbers_top_keys": [
+   "_comment",
+   "_source",
+   "_updated",
+   "numbers"
+  ],
+  "external_numbers_count": 60,
+  "external_numbers_value_types": [
+   "int"
+  ],
+  "seed_count": 60,
+  "NAMES_count": 80,
+  "channel_numbers_map_count": 60
+ },
+ "gap_count": 23,
+ "covered_count": 57,
+ "NAMES_count": 80,
+ "orphan_keys": [
+  "深圳少儿",
+  "睛彩竞技",
+  "睛彩青少"
+ ],
+ "gaps": [
+  {
+   "name": "延边卫视",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  },
+  {
+   "name": "新疆卫视高清",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  },
+  {
+   "name": "西藏卫视高清",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  },
+  {
+   "name": "宁夏卫视高清",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  },
+  {
+   "name": "新疆兵团卫视高清",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  },
+  {
+   "name": "第一剧场",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "怀旧剧场",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "央视台球",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "金鹰卡通",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "KAKU少儿",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "中国教育一",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "中国教育四",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "中学生频道",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "湖南金鹰纪实",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "世界地理",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "发现之旅",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "老故事",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "书画频道",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "汽摩频道",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "女性时尚",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "风云音乐",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "外挂台号表与内置 seed 均未登记（未在抓包台号表中出现）"
+  },
+  {
+   "name": "北京卫视4K超高清",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  },
+  {
+   "name": "CCTV-4K超高清",
+   "source": "channels.json 的键（NAMES，80 条之一）",
+   "in_external_numbers": false,
+   "in_seed": false,
+   "channels_json_value_type": "str",
+   "missing_reason": "卫视/高清/4K 类台名；EPG_CHANNEL_MAP 未收录，且 EPG 上游只给台名/节目单不含 STB 台号"
+  }
+ ]
+}

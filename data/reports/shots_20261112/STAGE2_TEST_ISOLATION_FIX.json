@@ -1,0 +1,40 @@
+{
+  "item": "AF-PM 11-12 阶段 2 插入阻塞项：只改测试、不改产品代码，ADB 离线全量 0 failed",
+  "root_cause": {
+    "summary": "TestToolBlueprintRun 的两条用例依赖全局模块注入顺序，间接依赖真机 ADB",
+    "chain": [
+      "collection 阶段 test_blueprint.py 先导入真实 tvpilot.blueprint，并把 tvpilot 包属性 blueprint 设为真模块",
+      "test_mcp.py 只注入 sys.modules['tvpilot.blueprint'] = 假模块，未覆盖包属性",
+      "mcp._ensure_tvpilot() (tvpilot/mcp.py:57-60) 用 `from tvpilot import blueprint`，Python 从包属性取到真模块",
+      "mcp._get_runner() (:395-403) 缓存真 BlueprintRunner，register_builtins() 注册 go_home 蓝图",
+      "tv_blueprint_run -> _t_blueprint_run (:413) -> 真 runner.run('go_home') -> tool_combo_go_home (tools.py:423) -> 真 ADB",
+      "ADB 在线时 tool_combo_go_home 能返回，测试侥幸通过；用户关闭 ADB 后抛 `adb shell closed unexpectedly`，_content_json 拿到错误文本 -> JSONDecodeError"
+    ],
+    "evidence": [
+      "python -m pytest tests/test_mcp.py -q -> 30 passed（单独跑，假 runner 生效）",
+      "python -m pytest tests/ -q -> 2 failed, 156 passed（全量）",
+      "python -m pytest tests/test_deprecated_surface.py tests/test_mcp.py -q -> 37 passed",
+      "python -m pytest tests/test_experience.py tests/test_mcp.py -q -> 54 passed",
+      "python -m pytest tests/test_blueprint.py tests/test_mcp.py -q -> 2 failed, 58 passed（复现，锁定污染源）",
+      "git stash push -- tvpilot/tools.py; pytest --ignore=tests/test_zap_fullscreen_judge.py -> 2 failed, 150 passed；stash pop 恢复 -> 证明与阶段 2 判据改动无关"
+    ]
+  },
+  "fix": {
+    "file": "tests/test_mcp.py",
+    "change": "给 TestToolBlueprintRun 新增 setUp()：从 _FAKE_MODULES['tvpilot.blueprint'] 取假 BlueprintRunner，用 mock.patch.object(mcp, '_get_runner', return_value=fake_runner) 自注入，addCleanup(patcher.stop) 保证恢复",
+    "scope": "仅测试代码；产品代码零改动",
+    "why_deterministic": "_get_runner 被直接打桩，绕过 _ensure_tvpilot / _runner 全局缓存 / 任何真机路径；后两条需要真实 runner + zap 桩的用例用 with mock.patch.object 临时覆盖，退出后自动恢复假 runner",
+    "notes": "未新增 conftest.py（仓内本就没有）；未改 subprocess.run 全局；未放宽任何断言"
+  },
+  "acceptance": {
+    "adb_state": "adb devices -> 仅表头 'List of devices attached'，无任何设备（ADB 离线）",
+    "py_compile": "python -m py_compile tests/test_mcp.py -> exit=0",
+    "lf_check": "tests/test_mcp.py CRLF=0 BOM=False",
+    "single_file": "python -m pytest tests/test_mcp.py -q -> 30 passed in 10.19s",
+    "reproducer_combo": "python -m pytest tests/test_blueprint.py tests/test_mcp.py -q -> 60 passed in 9.41s（修复前 2 failed, 58 passed）",
+    "full_suite": "python -m pytest tests/ -q -> 158 passed in 61.29s (0:01:01), 0 failed",
+    "verdict": "PASS：ADB 离线状态下全量 0 failed，测试不再依赖真机"
+  },
+  "discipline": "零真机动作、零注入、零前台变更、不碰容器、不 push、不改 channel_numbers.json、不改 .env、不启常驻服务、凭据零打印",
+  "product_code_diff": "tvpilot/tools.py 的 iptv_fullscreen_playing 等改动属阶段 2 第一步（上一轮已落，未提交），本阻塞项未再改产品代码"
+}

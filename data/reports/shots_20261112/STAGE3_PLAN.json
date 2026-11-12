@@ -1,0 +1,56 @@
+{
+ "formula": {
+  "denominator": "len(NAMES) = 80（用户可点频道全集，来自 channels.json 的键）",
+  "numerator_now": "|{n in NAMES : channel_no_of(n) is not None}| = 57",
+  "coverage_now": "0.7125 (= 57/80)",
+  "coverage_after": "(|{n in NAMES : channel_no_of(n) is not None}| + 新增可补条数) / len(NAMES)",
+  "reproduce": [
+   "from tvpilot.channels import NAMES, channel_no_of, channel_numbers_map",
+   "covered = [n for n in NAMES if channel_no_of(n) is not None]",
+   "gap = [n for n in NAMES if channel_no_of(n) is None]",
+   "coverage = len(covered) / len(NAMES)",
+   "assert len(covered) + len(gap) == len(NAMES)"
+  ],
+  "warning": "⛔ 不能用 len(channel_numbers_map())/len(NAMES) 当覆盖率：map 返回 seed∪外挂=60 条，其中 3 条不在 NAMES 里（孤儿键），会高估为 75.00%；真实覆盖率必须按 NAMES 逐个 channel_no_of() 判定。",
+  "orphan_keys": [
+   "深圳少儿",
+   "睛彩竞技",
+   "睛彩青少"
+  ],
+  "reproducible_formula": {
+   "step1": "cov = sum(1 for n in NAMES if channel_no_of(n) is not None) / len(NAMES)",
+   "step2_now": "cov = 57/80 = 0.7125",
+   "step3_after_k_added": "cov = (57 + k)/80，k 为新写入且被 channel_no_of 认可的台号条数；k=23 时 cov = 1.0000",
+   "step4_guard": "⛔ 不要用 len(channel_numbers_map())/len(NAMES)：map 含 3 条孤儿键，补号后该值会变成 (60+23)/80 = 1.0375，超过 1.0 即证明口径错误。",
+   "verification_command": "python -c \"from tvpilot.channels import NAMES,channel_no_of;print(sum(1 for n in NAMES if channel_no_of(n) is not None)/len(NAMES))\""
+  }
+ },
+ "plan_A_epg_auto": {
+  "method": "按 EPG 上游（epg.py 的 EPG_UPSTREAM）频道名匹配 NAMES 台名后自动补号",
+  "epg_channel_map_size": 23,
+  "epg_dst_sample": [
+   "中央4K",
+   "中央一台",
+   "中央七台",
+   "中央三台",
+   "中央九台",
+   "中央二台"
+  ],
+  "name_alignment_hits_in_gap": [],
+  "name_alignment_hit_count": 0,
+  "key_finding": "EPG_CHANNEL_MAP 的 value（映射后的 mytv 台名）与 23 条缺口交集 = 0 条；且这 0 条中有 0 条在 seed 里已有台号 —— 即 EPG 能对齐的都不是真缺口。",
+  "structural_limit": "51zmt EPG XML 的 <channel id>/<display-name> 只提供台名与节目单，不含运营商 STB 的数字台号（中央一台=21 这类是 IPTV STB 编号，EPG 无法给出）。因此方案 A 单独使用【无法补出任何台号】，只能做台名归一化/对齐。",
+  "expected_new_numbers": 0,
+  "expected_coverage_after": "0.7125 (= 57/80，与当前相同)",
+  "needs_network": true,
+  "network_note": "本轮未联网（epg.py 的 EPG_UPSTREAM 为公网），以上为 EPG_CHANNEL_MAP 静态上界；若放行联网抓取 e.xml，也只会得到台名，不会新增台号。"
+ },
+ "plan_B_manual_map": {
+  "method": "人工映射表：逐台确认 STB 数字台号后写入 data/channel_numbers.json 的 numbers",
+  "expected_new_numbers": 23,
+  "expected_coverage_after": "1.0000 (= 80/80)",
+  "precondition": "台号必须从运营商 STB 频道列表 / 真机 logcat 的 LastchannelID 实测取得，⛔ 不许按台号规律猜测（用户裁定「不猜台号」）；当前 ADB 离线，需等重开窗口。",
+  "collision_check": "补号后需校验 channel_name_of_no() 反向唯一：len(set(补后 map.values())) == len(补后 map)，否则同台号多名称会让 tool_zap 的回读错判。"
+ },
+ "recommendation": "方案 A 单独不可行（EPG 无台号字段，0 新增）；建议 A 只作台名归一化前置 + B 作台号来源，或纯 B。最终写入由 AF-PM 决定，本轮 ⛔ 不改 channel_numbers.json。"
+}

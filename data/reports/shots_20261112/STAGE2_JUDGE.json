@@ -1,0 +1,62 @@
+{
+  "stage": "2-step1",
+  "scope": "AF-PM 11-12 指令：只做阶段 2 第一步；ADB 已离线，判据改动只留离线单测，⛔ 不在真机上试",
+  "judge_fn": "tvpilot/tools.py: iptv_fullscreen_playing()",
+  "judge_basis": [
+    "dumpsys window windows 的 mCurrentFocus 含 com.android.smart.terminal.iptv（IPTV 前台）",
+    "IPTV 窗口 mFrame 与 mDisplayFrame 同尺寸（全屏）",
+    "两者都满足才 True；缺字段 / 异常 / 非 IPTV / 非全屏一律 False（fail-closed）"
+  ],
+  "media_session_used": false,
+  "media_session_rejected_reason": "AF-PM 现读 IPTV app 不注册媒体会话，dumpsys media_session 恒为空，作 fail-closed 条件会永远拦住换台",
+  "wired_into_tool_zap": false,
+  "wiring_note": "新判据函数已落但未接入 tool_zap；tool_zap 仍调 wait_for_playback_page()。等 AF-PM 开第 2 步且真机验证通过后再换，避免未经真机验证就改变换台行为",
+  "real_device_positive": {
+    "available": false,
+    "reason": "用户已关闭 ADB（device offline），按 AF-PM「立即停手 / 别在真机上试」未连真机",
+    "mCurrentFocus": null,
+    "mFrame": null,
+    "mDisplayFrame": null
+  },
+  "offline_unit_tests": {
+    "file": "tests/test_zap_fullscreen_judge.py",
+    "cases": 6,
+    "passed": 6,
+    "failed": 0,
+    "command": "python -m pytest tests/test_zap_fullscreen_judge.py -q",
+    "printed": "6 passed in 0.48s",
+    "coverage": [
+      "正向：IPTV 前台 + mFrame==mDisplayFrame -> True，三行结构化读数齐",
+      "负向：前台非 IPTV -> False（离线 mock，不注入 HOME）",
+      "负向：IPTV 前台但非全屏 -> False",
+      "负向：无 mFrame/mDisplayFrame -> False",
+      "负向：adb_shell_output 抛异常 -> False + reason=dumpsys_window_unavailable",
+      "注入 media_session 文本也不被带偏，只读 dumpsys window windows",
+      "每条都断言 adb_cmd.call_count == 0（判据零注入）"
+    ]
+  },
+  "py_compile": "exit=0",
+  "lf_check": "tvpilot/tools.py CRLF=0 BOM=False; tests/test_zap_fullscreen_judge.py CRLF=0 BOM=False",
+  "full_suite": {
+    "command": "python -m pytest tests/ -q",
+    "printed": "2 failed, 156 passed in 34.95s",
+    "failures": [
+      "tests/test_mcp.py::TestToolBlueprintRun::test_blueprint_run_returns_result",
+      "tests/test_mcp.py::TestToolBlueprintRun::test_blueprint_steps_stripped"
+    ],
+    "failure_signature": "步骤 \"home\" 失败: OSError: adb shell closed unexpectedly（真实 go_home 蓝图落到真实 ADB）",
+    "baseline_control": {
+      "commands": [
+        "git stash push -- tvpilot/tools.py",
+        "python -m pytest tests/ -q --ignore=tests/test_zap_fullscreen_judge.py",
+        "git stash pop"
+      ],
+      "printed": "2 failed, 150 passed in 30.67s（同一对失败用例）",
+      "conclusion": "HEAD 基线同样 2 failed，且 ignore 新单测后仍 2 failed ⇒ 与本次新增判据函数 / 新单测无关；属既有 test_mcp 假模块注入在全量顺序下未生效，被 ADB 离线暴露"
+    },
+    "single_file_control": "python -m pytest tests/test_mcp.py -q -> 30 passed（假 runner 单跑生效）"
+  },
+  "deleted_unexecuted_script": "data/reports/shots_20261112/stage2_judge.py（真机探针，仅写入从未执行；按「立即停手」删除，避免留可连真机的脚本）",
+  "verdict": "判据离线可用（6/6 单测）；真机正向验证不可用（ADB 离线，三行读数取不到）。停下等 AF-PM 开第 2 步；重开 ADB 后需补真机三行原始读数。",
+  "discipline": "零真机动作、零注入、零前台变更、不碰容器、不 push、不改 channel_numbers.json、不启常驻服务、凭据零打印"
+}
