@@ -26,5 +26,7 @@ ADB 私钥运行时挂载目录（本目录整体被 .gitignore 排除，绝不�
 | `XIAOMI_TOKEN` | `restore_cameras.py` | 同上 |
 | `XIAOMI_AUTH` | `restore_cameras.py` | 同上 |
 
+> **状态（2026-11-12，AF-PM 裁定，加一行、不删历史段落）**：上表 `GO2RTC_AUTH`、`XIAOMI_UID`、`XIAOMI_TOKEN`、`XIAOMI_AUTH` 四行是历史记录（保留不改）；其消费脚本 `patch_cameras_m3u.py` 与 `restore_cameras.py` 已随 go2rtc 换台链路整体隔离归档，原样保留于 `archive/go2rtc/scripts/`，复活依赖／步骤与 `.env.example` 占位模板见 **`archive/go2rtc/README.md`**；`GO2RTC_AUTH` 已移出仓根 `.env.example`（现为 **7 键**、不再消费），`XIAOMI_*` 三键仍在 7 键清单内但当前主链路无活消费方，仅归档脚本复活时使用。
+
 - `.env` 与真值一律不入库、不打印；本文件只列键名，不含任何值。
 - 本地口令轮换（go2rtc / NAS + DB 侧 key）由 AF-PM 另开窗口协调，需设备在场。
