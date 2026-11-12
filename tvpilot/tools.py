@@ -550,14 +550,17 @@ def tool_zap(channel):
         return None, ERR_CHANNEL_NO_NUMBER, (
             f'频道 "{name}" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号')
 
-    # 快速路径：已在 IPTV 前台时跳过 ensure（减少 get_foreground_pkg 调用）
-    fg_before = get_foreground_pkg()
+    # 快速路径：已在 IPTV 前台时跳过 ensure（force_refresh 绕开 state 的 1s 缓存，
+    # 否则读到旧前台会误进 ensure_mytv_foreground 并超时）。
+    fg_before = get_foreground_pkg(force_refresh=True)
     if fg_before and IPTV_PKG in fg_before:
         fg = {'ok': True, 'action': 'already_foreground_fastpath', 'pkg': fg_before, 'cold_start': False}
     else:
         fg = ensure_mytv_foreground()
         if not fg.get('ok'):
-            return None, ERR_WRONG_FOREGROUND, f'mytv 未能切到前台: {fg.get("last") or fg.get("error")}'
+            # 如实反映底层错误（_ensure_mytv_foreground_inner 返回的是 IPTV 启动结果），
+            # 不再误导成已不存在的 "mytv 前置"。
+            return None, ERR_WRONG_FOREGROUND, f'IPTV 启动后未到前台: {fg.get("last") or fg.get("error")}'
 
     adb_ok, adb_msg = zap_via_adb_digits(no)
     if not adb_ok:
