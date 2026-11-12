@@ -315,6 +315,22 @@ class TestToolZap(unittest.TestCase):
 class TestToolBlueprintRun(unittest.TestCase):
     """验收7：tv_blueprint_run 正确调用 BlueprintRunner"""
 
+    def setUp(self):
+        """AF-PM 11-12 阻塞项修复：本类不依赖全局模块注入顺序，也不许依赖真机。
+
+        根因：collection 阶段 test_blueprint.py 先导入真实 tvpilot.blueprint 并把
+        `tvpilot` 包属性设为真模块；test_mcp.py 只注入 sys.modules，而 mcp 的
+        `from tvpilot import blueprint` 走包属性 → _get_runner() 缓存真 runner →
+        go_home 蓝图执行 tool_combo_go_home → 真 ADB。ADB 在线时侥幸能过，离线即红。
+        这里在 setUp 自注入假 runner，全程不触真机；后两条需要真实 runner + zap
+        桩的用例会用 with mock.patch.object 临时覆盖，退出后自动恢复本假 runner。
+        """
+        from unittest import mock
+        fake_runner = _FAKE_MODULES['tvpilot.blueprint'].BlueprintRunner()
+        patcher = mock.patch.object(mcp, '_get_runner', return_value=fake_runner)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_blueprint_run_returns_result(self):
         resp = _call_tool('tv_blueprint_run', {'name': 'go_home'})
         data = _content_json(resp)
