@@ -17,6 +17,7 @@ from tvpilot.errors import (
     ERR_INVALID_PARAMETER, ERR_OPERATION_TIMEOUT, ERR_TV_UNREACHABLE,
     ERR_WRONG_FOREGROUND, ERR_CHANNEL_NO_NUMBER, ERR_MYTV_API_ERROR,
     ERR_APP_NOT_RESPONDING, ERR_APP_NOT_FOUND, ERR_APP_LAUNCH_FAILED,
+    ERR_INVALID_STATE,
 )
 
 MYTV_ACT = os.environ.get('TVPILOT_MYTV_ACT', 'com.tvcam.mytv/.activities.LeanbackActivity')
@@ -492,12 +493,13 @@ def tool_launch_app(package, activity=None):
 # ========== 换台 ==========
 
 def zap_via_adb_digits(channel_no):
-    """降级换台：单次 `input keyevent` 一次下发全部数字键 + ENTER。
+    """降级换台：逐位单键下发数字键，末位之后单独 ENTER（AF-PM 11-12 工程兜底）。
 
-    AF-PM 11-12：原实现用 `input keyevent K1 && sleep 0.35 && input keyevent K2 ...`
-    串位，B5 真机同代码同基线仍出现 `50 -> 5`，且耗时翻倍（36.9s vs 14.4s）。
-    `input keyevent` 原生支持一次多键；改成单条命令彻底去掉 sleep 与 `&&` 链，
-    位间不再依赖 toybox 小数 sleep，也不再依赖前一条命令的返回码。
+    实测排除三项：多键语法（input --help）、InputDispatcher 丢弃、键盘源；
+    但 B7 窗口只落一条 `KEYCODE_UNKNOWN (keyCode=0)`，单次多参 `input keyevent`
+    在本机没把参数解析成数字键 ⇒ 不再用单次多参，也不用 `&& sleep` 链。
+    改为每个键一条 `adb_cmd('input keyevent KEYCODE_n')`，**注入前** Python 侧
+    `time.sleep(0.5)` 控制位间，ENTER 为最后一条。丢键根因仍未定位，本实现是工程兜底。
     """
     digits = str(channel_no)
     key_map = {'0': 'KEYCODE_0', '1': 'KEYCODE_1', '2': 'KEYCODE_2', '3': 'KEYCODE_3',
@@ -506,7 +508,9 @@ def zap_via_adb_digits(channel_no):
     try:
         keys = [key_map[d] for d in digits]
         keys.append('KEYCODE_ENTER')
-        adb_cmd('input keyevent ' + ' '.join(keys))
+        for key in keys:
+            time.sleep(0.5)
+            adb_cmd(f'input keyevent {key}')
         return True, f'输入频道号 {digits}'
     except subprocess.TimeoutExpired:
         return False, '数字键输入超时'
@@ -515,8 +519,8 @@ def zap_via_adb_digits(channel_no):
 
 
 def tool_zap(channel):
-    """mytv 换台工具（ADB 数字键注入）。
-    F1: 换台前先把 mytv 拉到前台——仅在语音/管家换台这一显式调用点唤起；
+    """ADB 数字键换台工具。
+    F1: 工具级前台守卫——注入前 fg 必须是 IPTV，否则 fail-closed 零注入（不再主动拉前台）；
     F2: 数字台号取自单一真源 data/channel_numbers.json（channel_no_of）。"""
     if not channel:
         return None, ERR_INVALID_PARAMETER, 'channel 不能为空'
@@ -552,17 +556,13 @@ def tool_zap(channel):
         return None, ERR_CHANNEL_NO_NUMBER, (
             f'频道 "{name}" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号')
 
-    # 快速路径：已在 IPTV 前台时跳过 ensure（force_refresh 绕开 state 的 1s 缓存，
-    # 否则读到旧前台会误进 ensure_mytv_foreground 并超时）。
+    # 工具级前台守卫（AF-PM 11-12，比修法更重要）：注入前断言 fg 是 IPTV，
+    # 不是就 fail-closed 返回 invalid_state、零注入。B5/B7 都是前台被切走还照打，
+    # 守卫放在工具层才拦得住；不再尝试 ensure_mytv_foreground 主动拉前台。
     fg_before = get_foreground_pkg(force_refresh=True)
-    if fg_before and IPTV_PKG in fg_before:
-        fg = {'ok': True, 'action': 'already_foreground_fastpath', 'pkg': fg_before, 'cold_start': False}
-    else:
-        fg = ensure_mytv_foreground()
-        if not fg.get('ok'):
-            # 如实反映底层错误（_ensure_mytv_foreground_inner 返回的是 IPTV 启动结果），
-            # 不再误导成已不存在的 "mytv 前置"。
-            return None, ERR_WRONG_FOREGROUND, f'IPTV 启动后未到前台: {fg.get("last") or fg.get("error")}'
+    if not fg_before or IPTV_PKG not in fg_before:
+        return None, ERR_INVALID_STATE, f'IPTV 不在前台，拒绝注入按键: {fg_before}'
+    fg = {'ok': True, 'action': 'already_foreground_fastpath', 'pkg': fg_before, 'cold_start': False}
 
     adb_ok, adb_msg = zap_via_adb_digits(no)
     if not adb_ok:

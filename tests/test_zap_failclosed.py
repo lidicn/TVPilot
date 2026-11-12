@@ -6,6 +6,8 @@
 `invalid_parameter`，绝不触发任何 ADB 按键注入。
 
 隔离纪律：tvpilot 子模块一律函数内 importlib 导入（AF-PM 11-12）。
+逐位单键调用序列与工具级前台守卫见 `tests/test_zap_digits.py`；
+原「单次多参一条命令」断言随 B7 实测证伪的实现一并退役（AF-PM 11-12）。
 
 用法：pytest tests/test_zap_failclosed.py -q
 """
@@ -48,31 +50,3 @@ def test_rerun_numbers_are_all_reachable_via_tv_zap():
         matched = [n for n in NAMES if str(channel_no_of(n)) == no]
         assert matched, '台号 %s 在 NAMES 里无对应频道' % no
         assert expected_name in matched, '%s -> %r' % (no, matched)
-
-
-def test_digits_sent_as_one_command_without_sleep(monkeypatch):
-    """单次 input keyevent 含全部位 + ENTER，只发一条命令，无 sleep / 无 && 链。"""
-    t = importlib.import_module('tvpilot.tools')
-    calls = []
-
-    def _capture(cmd, *a, **k):
-        calls.append(cmd)
-
-    monkeypatch.setattr(t, 'adb_cmd', _capture)
-
-    cases = (
-        (50, ['KEYCODE_5', 'KEYCODE_0', 'KEYCODE_ENTER']),
-        (401, ['KEYCODE_4', 'KEYCODE_0', 'KEYCODE_1', 'KEYCODE_ENTER']),
-        (261, ['KEYCODE_2', 'KEYCODE_6', 'KEYCODE_1', 'KEYCODE_ENTER']),
-        (21, ['KEYCODE_2', 'KEYCODE_1', 'KEYCODE_ENTER']),
-    )
-    for no, expected_keys in cases:
-        calls.clear()
-        ok, msg = t.zap_via_adb_digits(no)
-        assert ok, '台号 %s: %s' % (no, msg)
-        assert len(calls) == 1, '台号 %s 应只发一次 adb 命令，实得 %r' % (no, calls)
-        cmd = calls[0]
-        assert cmd.startswith('input keyevent '), repr(cmd)
-        for key in expected_keys:
-            assert key in cmd, '%s 缺 %s' % (cmd, key)
-        assert 'sleep' not in cmd and '&&' not in cmd, '仍依赖 sleep/&& 链: %s' % cmd

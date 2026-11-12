@@ -14,6 +14,7 @@ ERR_NOT_IMPLEMENTED = 'not_implemented'
 ERR_CHANNEL_NO_NUMBER = 'channel_no_number'  # 频道无数字台号
 ERR_APP_NOT_FOUND = 'app_not_found'  # 应用未安装
 ERR_APP_LAUNCH_FAILED = 'app_launch_failed'  # 应用启动失败
+ERR_INVALID_STATE = 'invalid_state'  # 工具级守卫：前台状态不符，零注入
 
 __all__ = [
     'ERR_TV_UNREACHABLE',
@@ -26,4 +27,5 @@ __all__ = [
     'ERR_CHANNEL_NO_NUMBER',
     'ERR_APP_NOT_FOUND',
     'ERR_APP_LAUNCH_FAILED',
+    'ERR_INVALID_STATE',
 ]
