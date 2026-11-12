@@ -751,34 +751,42 @@ def tool_ui_dump():
                     continue
                 cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-                # 只保留有文字/可点击/可输入/有描述的元素（省 token）
-                # 放宽过滤：电信 IPTV 播放页是 WebView + 视频层，uiautomator dump
-                # 只返回容器节点（text/clickable/editable/desc 全空），旧规则会全部滤掉 -> count=0。
-                # 保留有有效 bounds 的可见节点，供 tv_tap_index 坐标点击。
-                if True:
-                    xpath = _node_xpath(node, class_counter)
+                # 显式谓词（AF-PM 11-12）：只保留「有有效 bounds 且对用户有语义」的节点。
+                # 电信 IPTV 播放页是 WebView + 视频层，节点常无 text/desc/clickable/editable，
+                # 靠 visible_to_user + bounds 兜底保留容器节点，供 tv_tap_index 坐标点击。
+                # ⛔ 不得写成 if True：那会把 visible-to-user="false" 的隐形节点一并收进来；
+                # 隐形节点由上面 `if not visible: continue` 先挡掉，离线单测见
+                # tests/test_ui_dump_filter.py。
+                bounds_ok = bool(m)
+                visible_to_user = visible
+                keep_node = bounds_ok and (
+                    bool(text) or bool(desc) or clickable or editable or visible_to_user
+                )
+                if not keep_node:
+                    continue
+                xpath = _node_xpath(node, class_counter)
 
-                    # 生成稳定的 element_id（用 text + bounds 哈希）
-                    id_str = f"{text}|{desc}|{x1},{y1},{x2},{y2}"
-                    element_id = hashlib.md5(id_str.encode()).hexdigest()[:8]
+                # 生成稳定的 element_id（用 text + bounds 哈希）
+                id_str = f"{text}|{desc}|{x1},{y1},{x2},{y2}"
+                element_id = hashlib.md5(id_str.encode()).hexdigest()[:8]
 
-                    # 推断元素类型
-                    el_type = 'button' if clickable else ('input' if editable else ('text' if text else 'region'))
+                # 推断元素类型
+                el_type = 'button' if clickable else ('input' if editable else ('text' if text else 'region'))
 
-                    elements.append({
-                        'element_id': element_id,
-                        'text': text,
-                        'desc': desc if desc else None,
-                        'bounds': [x1, y1, x2, y2],
-                        'center': [cx, cy],
-                        'clickable': clickable,
-                        'focusable': focusable,
-                        'editable': editable,
-                        'type': el_type,
-                        'class': cls.split('.')[-1] if cls else '',
-                        'resource_id': res_id.split('/')[-1] if '/' in res_id else res_id,
-                        'xpath': xpath,
-                    })
+                elements.append({
+                    'element_id': element_id,
+                    'text': text,
+                    'desc': desc if desc else None,
+                    'bounds': [x1, y1, x2, y2],
+                    'center': [cx, cy],
+                    'clickable': clickable,
+                    'focusable': focusable,
+                    'editable': editable,
+                    'type': el_type,
+                    'class': cls.split('.')[-1] if cls else '',
+                    'resource_id': res_id.split('/')[-1] if '/' in res_id else res_id,
+                    'xpath': xpath,
+                })
         # 排序：可点击优先 → 从上到下 → 从左到右
         elements.sort(key=lambda e: (0 if e['clickable'] else 1, e['bounds'][1], e['bounds'][0]))
         # 分配索引
