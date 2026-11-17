@@ -83,6 +83,16 @@ class _ShellSession:
             pass
 
 
+def _mark_disconnected():
+    """标记 ADB 断连：清掉 60s 信任窗口，强制 adb_ready() 下次走真实探测/重连。
+
+    收口在 _run_shell_persistent 的异常出口，覆盖 adb_cmd / adb_shell_output 两条
+    上层路径。⛔ 只改状态，不发任何设备命令（重连由 adb_ready 负责）。
+    """
+    _adb_state['connected'] = False
+    _adb_state['last_check'] = 0.0
+
+
 def _ensure_session():
     """确保一个干净的持久会话；进程已死或超时被弃用则重建。"""
     global _shell_session
@@ -191,7 +201,14 @@ def _run_shell_persistent(cmd, timeout=10):
             if line.rstrip('\r\n') == marker:
                 return ''.join(out)
             out.append(line)
-    except (subprocess.TimeoutExpired, OSError):
+    except subprocess.TimeoutExpired:
+        # 命令级超时：fail-fast 已 terminate + 排空 + 重启会话，连接仍在，
+        # 不改 connected（超时≠掉线）。由调用方决定吞掉还是上抛。
+        raise
+    except OSError:
+        # 持久 shell 意外退出（电视断电/重启/Wi-Fi 重连）：标记断连，清掉 60s
+        # 信任窗口。收口在此，adb_cmd / adb_shell_output 两条上层路径同时受益。
+        _mark_disconnected()
         raise
     except Exception:
         _restart_session()
@@ -214,14 +231,29 @@ def adb_cmd(cmd, timeout=30):
         except subprocess.TimeoutExpired:
             # fail-fast 已 terminate + 排空 + 重启；fire-and-forget 不向上抛。
             pass
+        except OSError:
+            # 会话意外退出：_run_shell_persistent 已中心标记断连
+            # （connected=False / last_check=0.0）。此处立即强制重探重连，
+            # 让掉线后第一次调用就恢复链路；fire-and-forget 不把 OSError 冒泡
+            # 到工具层，也不刷新 last_check 覆盖刚标记的断连状态。
+            adb_ready(force=True)
+            return
     _adb_state['last_check'] = time.time()
 
 
 def adb_shell_output(cmd, timeout=10):
     """执行 adb shell 命令并返回输出文本。超时 fail-fast 抛 TimeoutExpired。"""
     adb_ready()
-    with _CMD_LOCK:
-        result = _run_shell_persistent(cmd, timeout=timeout)
+    try:
+        with _CMD_LOCK:
+            result = _run_shell_persistent(cmd, timeout=timeout)
+    except OSError:
+        # 读输出类工具必须知道读取失败 ⇒ 如实上抛；但状态已由
+        # _run_shell_persistent 中心标记断连（connected=False / last_check=0.0），
+        # 下一次调用 adb_ready() 会真实探测重连，链路自动恢复、不再卡死。
+        # 立即 force 重探，缩短恢复窗口；仍 re-raise，不伪装成读成功。
+        adb_ready(force=True)
+        raise
     _adb_state['last_check'] = time.time()
     return result
 
