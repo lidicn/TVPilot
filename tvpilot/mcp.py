@@ -620,6 +620,27 @@ def _t_theme_push(args):
     return _ok_content(res)
 
 
+def _t_af_morning_news(args):
+    """af_morning_news（契约 v3 §1.1）：早间新闻全链，返回六值终态回执。
+
+    fail-closed：默认不注入真机 runner —— 任何设备动作由编排的 _NoRunner 抛
+    DeviceActionBlocked，编排兜底落 wake_fail(detail=device_action_blocked)，
+    零真机副作用。只有显式置环境变量 TVPILOT_MN_RUNNER=adb 才注入 ADBRunner
+    （仅验收/部署窗由部署侧置位）。
+    """
+    from tvpilot import af_morning_news as _mn
+    runner = None
+    # 双闸（矩阵规范 §7）：默认关；须部署侧同时置 ARMED=1 且 RUNNER=adb 才注入
+    # 真机 runner。闸关时 _NoRunner 抛 DeviceActionBlocked ⇒ 编排兜底落
+    # wake_fail(detail=device_action_blocked)，零真机副作用、显式失败非静默跳过。
+    if (os.environ.get('TVPILOT_MN_ARMED') == '1'
+            and os.environ.get('TVPILOT_MN_RUNNER') == 'adb'):
+        from tvpilot import af_morning_news_runner as _rn
+        runner = _rn.ADBRunner()
+    rec = _mn.MorningNewsOrchestrator(runner=runner).run(args.get('request_id'))
+    return _ok_content(rec, clean=False)
+
+
 def _build_tools():
     """构建工具表（延迟构建，确保 _ensure_tvpilot 后函数引用正确）。"""
     _ensure_tvpilot()
@@ -941,6 +962,19 @@ def _build_tools():
                 },
             },
             'handler': _t_theme_status,
+        },
+        # v3 §1.1 冻结形制（AF-PM 2026-11-15 定稿）：第 30 枚，正好顶满 MAX_TOOLS=30。
+        {
+            'name': 'af_morning_news',
+            'description': '早间新闻全链：唤醒→ADB→IPTV全屏→中央一台，返回六值终态',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'request_id': {'type': 'string', 'description': '幂等关联 id，可省'},
+                },
+                'required': [],
+            },
+            'handler': _t_af_morning_news,
         },
     ]
 
