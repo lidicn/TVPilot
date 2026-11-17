@@ -1,4 +1,5 @@
 # android-use 借鉴分析报告
+> 状态（2026-11-12 整理）：**历史记录**。本文记录当时的事实，不代表当前状态；现行口径见 `doc/README.md` 真源优先级表。
 
 > 日期：2026-09-27
 > 项目：https://github.com/languse-ai/android-use

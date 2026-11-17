@@ -1,4 +1,5 @@
 ﻿# TVPilot MCP 专项审计报告
+> 状态（2026-11-12 整理）：**历史记录**。本文记录当时的事实，不代表当前状态；现行口径见 `doc/README.md` 真源优先级表。
 
 - 审计日期: 2026-10-09
 - 审计对象: TVPilot MCP(16 工具: tv_system_state / tv_foreground / tv_screenshot / tv_ui_dump / tv_list_apps / tv_app_state / tv_keyevent / tv_launch_app / tv_zap / tv_tap_index / tv_click_text / tv_blueprint_run / tv_input_text / tv_force_stop / tv_tap / tv_go_home)
