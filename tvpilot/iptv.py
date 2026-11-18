@@ -51,7 +51,12 @@ _load_channel_id_map()
 
 
 def get_current_channel_from_logcat():
-    """从 IPTV SharedPreferences 读取当前播放频道号。"""
+    """从 IPTV SharedPreferences 读取当前播放频道号（**仅作旁证/留痕**）。
+
+    ⚠ 2026-11-17 实测：本机多位数注入时 `LastchannelID` 只写首位（注 22 读 2、
+    21 读 1），且 `play_state.channel_no` 是缓存旧值 ⇒ 两者都**不可信**，
+    ⛔ 不得用作 S4 判据。可信台号改用 `resolve_channel_from_livepath()`。
+    """
     try:
         result = subprocess.run(
             ['adb', '-s', ADB_HOST, 'shell',
@@ -66,6 +71,80 @@ def get_current_channel_from_logcat():
     except Exception as e:
         print(f'[ChannelID] 读取失败: {e}', flush=True)
         return None
+
+
+# ---- 2026-11-17：换台瞬间从 CTCMediaPlayer 的 livePath 日志解可信台号 ----
+# 文档 `doc/archive/电信IPTV_RTSP地址抓取流程.md`：换台瞬间 logcat 输出
+#   CTCMediaPlayer: MediaPlayer > setDataSource --livePath--->rtsp://.../PLTV/88888895/224/{channel_id}/{stream_id}_0.smil...
+# channel_id / stream_id 固定，可反解台号。⚠ 该行只在换台瞬间出现、非常驻，
+# 必须「清 logcat → 注入台号 → 等 7-12s → 抓 setDataSource」同步进行。
+_LIVEPATH_RE = re.compile(
+    r'setDataSource\s*--livePath--->\s*(rtsp://[^\s]+/PLTV/\d+/\d+/(\d+)/[^_\s]+_0\.smil)')
+_channel_id_to_no = None   # 懒加载 {channel_id(str): 台号(int)}
+
+
+def parse_channel_id_from_logcat(text):
+    """从一段 logcat 文本解析最新 livePath 的 channel_id（纯函数，不连设备）。
+
+    :return: (channel_id:str|None, matched_rtsp:bool) —— 只回 channel_id，不回完整
+             URL（URL 含认证串，凭据零打印）；无命中返回 (None, False)。
+    """
+    if not text:
+        return None, False
+    found = None
+    for line in text.splitlines():
+        m = _LIVEPATH_RE.search(line)
+        if m:
+            found = m.group(2)     # 取最后一条（最近一次换台）
+    return (found, found is not None)
+
+
+def _load_channel_id_to_no():
+    """离线建 {channel_id: 台号}：channel_id 取自 channels.json 各台的 RTSP URL，
+    台号取自 channel_numbers.json（台名→台号）。纯读本地文件，不连设备、不打印 URL 值。"""
+    global _channel_id_to_no
+    if _channel_id_to_no is not None:
+        return _channel_id_to_no
+    mapping = {}
+    try:
+        import json
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(base, 'channels.json'), encoding='utf-8') as f:
+            chans = json.load(f)                       # {台名: rtsp_url}
+        nums_path = os.path.join(base, 'data', 'channel_numbers.json')
+        with open(nums_path, encoding='utf-8') as f:
+            _nums_doc = json.load(f)
+        # 真源是嵌套结构 {"numbers": {台名: 台号}, "_comment":..., ...}；
+        # 兼容旧的平铺结构，避免映射建成 0 条又静默。
+        nums = _nums_doc.get('numbers', _nums_doc) if isinstance(_nums_doc, dict) else {}
+        for name, url in chans.items():
+            m = re.search(r'/PLTV/\d+/\d+/(\d+)/', str(url))
+            no = nums.get(name)
+            if m and no is not None:
+                mapping[m.group(1)] = int(no)
+    except Exception:
+        pass
+    _channel_id_to_no = mapping
+    return mapping
+
+
+def resolve_channel_from_livepath(logcat_text):
+    """换台后从 livePath 日志反解可信台号（fail-closed）。
+
+    :return: (no:int|None, reason:str|None, channel_id:str|None)
+        - 命中 livePath 且 channel_id 在映射中 ⇒ (台号, None, channel_id)
+        - 命中但映射不到 ⇒ (None, 'channel_id_unmapped', channel_id)
+        - 无 livePath ⇒ (None, 'livepath_absent', None)
+    ⛔ 不猜、不回退 LastchannelID/缓存；拿不到就是 unknown+reason。
+    """
+    cid, matched = parse_channel_id_from_logcat(logcat_text)
+    if not matched:
+        return None, 'livepath_absent', None
+    m = _load_channel_id_to_no()
+    no = m.get(cid)
+    if no is None:
+        return None, 'channel_id_unmapped', cid
+    return no, None, cid
 
 
 def fetch_iptv_source():

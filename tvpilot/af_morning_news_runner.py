@@ -37,10 +37,28 @@ class ADBRunner:
     False / 带 reason 的 Frame，⛔ 不伪装成功、⛔ 不把异常冒泡成设备上误判。
     """
 
-    def __init__(self, screen_evidence=None):
+    def __init__(self, screen_evidence=None, livepath_reader=None):
         # 可选硬旁证注入口（截屏 / UI 树判定「正在播」）；None ⇒ 用 play_state 弱旁证
         self.screen_evidence = screen_evidence
+        # 2026-11-17：换台后读 logcat 文本的接口（供 livePath channel_id 解台号）。
+        # 注入式，离线测试可喂假 logcat；None ⇒ 默认走 _read_livepath_logcat()。
+        self.livepath_reader = livepath_reader
         self.last_evidence = {}   # 每次采集的原始读数，供验收窗留证
+
+    @staticmethod
+    def _read_livepath_logcat():
+        """默认 livePath 读取器：抓保留的最近 logcat，按 CTCMediaPlayer 过滤。
+
+        ⚠ livePath 只在换台瞬间输出；编排里 read_frame 紧接 zap 之后调用，此时
+        该行应仍在环形缓冲中。若已被冲掉 ⇒ 解不出 channel_id ⇒ S4 unknown+reason
+        （fail-closed，⛔ 不回退到不可信的 LastchannelID/缓存）。
+        """
+        try:
+            from tvpilot import adb
+            return adb.adb_shell_output('logcat -b all -d -t 2000 | grep -F "livePath" | tail -5',
+                                        timeout=10) or ''
+        except Exception:
+            return ''
 
     # 1. 唤醒：只校验已在线/亮屏，⛔ 不做电源唤醒
     def wake(self):
@@ -108,40 +126,61 @@ class ADBRunner:
 
     # 5. 单次调用内连续采集 S3/S4/S7 + 播放旁证（同帧近似，共用 checked_at）
     def read_frame(self):
+        """2026-11-17 修复：S4 台号改由换台瞬间 livePath 的 channel_id 反解（可信），
+        ⛔ 不再用 LastchannelID（多位数只写首位）/play_state 缓存（旧值）冒充现值。
+        全屏/正在播旁证仍需成立；两者缺一 ⇒ Frame.reason 非空 ⇒ decide_iptv_ok 拒绝
+        冒充 iptv_ok（fail-closed）。"""
         from tvpilot import state, iptv
         checked = time.time()
         try:
-            fg = state.get_foreground_pkg(force_refresh=True)     # S3
-            ch = state.get_current_channel() or {}                # S4（缓存＝上次成功换台）
+            fg = state.get_foreground_pkg(force_refresh=True)        # S3
+            ch = state.get_current_channel() or {}                   # 缓存，仅留证不判据
             play, perr, _ = state.tool_play_state()
             playing = bool(perr is None and (play or {}).get('playing'))
-            # 硬旁证优先（若注入了截屏/UI 树判定），否则用 play_state 弱旁证
             if self.screen_evidence is not None:
                 try:
                     playing = bool(self.screen_evidence())
                 except Exception:
                     playing = False
+
+            # S4 可信台号：换台瞬间 livePath → channel_id → 台号
+            reader = self.livepath_reader or self._read_livepath_logcat
+            try:
+                logcat_text = reader()
+            except Exception:
+                logcat_text = ''
+            s4_no, s4_reason, cid = iptv.resolve_channel_from_livepath(logcat_text)
+
             last_id = None
             try:
-                last_id = iptv.get_current_channel_from_logcat()   # LastchannelID，仅留证
+                last_id = iptv.get_current_channel_from_logcat()      # 仅旁证/留痕
             except Exception:
                 pass
             self.last_evidence['read_frame'] = {
                 's3_foreground_app': fg,
+                's4_trusted_no': s4_no, 's4_reason': s4_reason, 'channel_id': cid,
                 's4_cached_name': ch.get('name'), 's4_cached_no': ch.get('no'),
-                'lastchannel_id': last_id,
+                'lastchannel_id': last_id,          # 已知不可信，仅留证
                 'playing_witness': playing,
                 'witness_kind': ('screen_evidence' if self.screen_evidence is not None
                                  else 'play_state'),
                 'checked_at': checked,
             }
-            reason = None if playing else 'playing_unverified'
+            # 我正在播 + 可信台号两者都要；缺一即 reason 非空 → 拒绝冒充 iptv_ok
+            if not playing:
+                reason = 'playing_unverified'
+            elif s4_no is None:
+                reason = s4_reason or 'channel_unresolved'
+            elif s4_no != CCTV1_NO:
+                reason = 's4_not_cctv1'
+            else:
+                reason = None
             return Frame(
                 foreground_app=fg,
-                current_channel=ch.get('name'),
+                current_channel=ch.get('name') if s4_no == CCTV1_NO else None,
                 same_frame=True,          # 单次调用内采集（非跨帧）
                 checked_at=checked,
-                reason=reason,           # 无「正在播」旁证 ⇒ 拒绝冒充 iptv_ok
+                reason=reason,           # 无「正在播」旁证/台号不可信 ⇒ 拒绝 iptv_ok
                 tvdesk_login_state=s7_state(checked),
             )
         except Exception as exc:

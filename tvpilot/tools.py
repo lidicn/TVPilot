@@ -1,7 +1,7 @@
 """TVPilot 核心工具层。
 
 绞杀者模式阶段9迁移：换台、按键、点击、滑动、中文输入、启动App、回桌面。
-自包含：MYTV_ACT/TVREMOTEIME_* 从环境变量读。
+自包含：IPTV_ACT/TVREMOTEIME_* 从环境变量读（MYTV_ACT 仅兼容保留）。
 """
 import os
 import re
@@ -20,7 +20,7 @@ from tvpilot.errors import (
     ERR_INVALID_STATE,
 )
 
-MYTV_ACT = os.environ.get('TVPILOT_MYTV_ACT', 'com.tvcam.mytv/.activities.LeanbackActivity')
+MYTV_ACT = os.environ.get('TVPILOT_MYTV_ACT', 'com.tvcam.mytv/.activities.LeanbackActivity')  # deprecated: 退役空壳
 IPTV_PKG = os.environ.get('TVPILOT_IPTV_PKG', 'com.android.smart.terminal.iptv')
 IPTV_ACT = os.environ.get('TVPILOT_IPTV_ACT', 'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity')
 TVREMOTEIME_PKG = os.environ.get('TVPILOT_IME_PKG', 'com.android.tvremoteime')
@@ -35,15 +35,23 @@ ZAP_PLAYBACK_POLL_INTERVAL = float(os.environ.get('TVPILOT_ZAP_PLAYBACK_POLL', '
 _FG_LOCK = threading.Lock()
 
 
-# ========== mytv 前台保障 ==========
+# ========== IPTV 前台保障 ==========
 
-def ensure_mytv_foreground(timeout=ZAP_FOREGROUND_TIMEOUT):
-    """HV-1: 整段拉前台动作串行化，避免语音/MQTT 两路 HOME+am start 互相打断。"""
+def ensure_iptv_foreground(timeout=ZAP_FOREGROUND_TIMEOUT):
+    """HV-1: 整段拉前台动作串行化，避免语音/MQTT 两路 HOME+am start 互相打断。
+
+    规范名。历史名 ensure_mytv_foreground 保留为兼容别名——函数体自 v2 起
+    就是直拉 IPTV 原生 app，与已退役的 mytv 空壳无关（§10.17）。
+    """
     with _FG_LOCK:
-        return _ensure_mytv_foreground_inner(timeout)
+        return _ensure_iptv_foreground_inner(timeout)
 
 
-def _ensure_mytv_foreground_inner(timeout=ZAP_FOREGROUND_TIMEOUT):
+# 兼容别名（历史名），保留以免破坏既有 import / 蓝图工具表
+ensure_mytv_foreground = ensure_iptv_foreground
+
+
+def _ensure_iptv_foreground_inner(timeout=ZAP_FOREGROUND_TIMEOUT):
     """确保 IPTV 在前台（v2 优化：直接启动 IPTV，绕过 mytv）。
     冷启动时额外等待 15s 让 IPTV 加载完成（导航页→播放页）。"""
     def _is_iptv():
@@ -508,28 +516,24 @@ _PLAYBACK_CTRL_RE = re.compile(
 
 
 def _playback_page_ready():
-    """只读探测 IPTV 是否已进入播放页（零注入、零前台变更）。
+    """只读探测 IPTV 是否已进入全屏播放页（零注入、零前台变更）。
 
-    判据（任一成立即就绪）：
-      ① `dumpsys media_session` 出现播放态（`state=PLAYING` / `STATE_PLAYING`，
-         或 Android `PlaybackState {state=3 ...}`，3 == STATE_PLAYING）；
-      ② `uiautomator dump /dev/tty` 的 UI 树出现播放控件（暂停/进度/全屏/EPG 等）。
-    两者都走 `adb_shell_output` 单次只读；任何异常按「未就绪」处理，不抛进换台流程。
-    拆成独立函数便于离线单测 mock（AF-PM 11-12）。
+    判据（2026-11-17 修复）：本机 Android 9 上旧判据失效——`dumpsys media_session`
+    无 `state=PLAYING`（IPTV 原生 app 不注册媒体会话）、`uiautomator dump /dev/tty`
+    只回 34 字符不出 UI 树，两条恒 False，导致换台被守卫拒绝、还空转 195–213s。
+    现改为复用 `iptv_fullscreen_playing()` 的 `dumpsys window windows` 全屏几何判据：
+      `mCurrentFocus` 含 IPTV Activity ∧ IPTV 窗口 `mFrame==[0,0,w,h]`（w,h 取自 `wm size`）。
+    ⚠ 本机不产 `mDisplayFrame` 字段，故判据是 mFrame 对齐 `wm size` 屏幕尺寸，而非对齐该缺失字段。
+    本机实测可读（`mFrame=[0,0,1920,1080]`、`wm size=1920x1080`），不依赖上面两条产不出的信号。
+    任何异常按「未就绪」fail-closed，不抛进换台流程。
     """
     try:
-        out = adb_shell_output('dumpsys media_session', timeout=8) or ''
-        if _PLAYBACK_STATE_RE.search(out):
-            return True, 'media_session:PLAYING'
-    except Exception:
-        pass
-    try:
-        out = adb_shell_output('uiautomator dump /dev/tty', timeout=10) or ''
-        if _PLAYBACK_CTRL_RE.search(out):
-            return True, 'ui_dump:playback_controls'
-    except Exception:
-        pass
-    return False, 'no_playback_page_signal'
+        ok, detail = iptv_fullscreen_playing()
+        if ok:
+            return True, 'window:fullscreen_iptv'
+        return False, 'window:%s' % (detail.get('reason', 'not_fullscreen') if isinstance(detail, dict) else 'not_fullscreen')
+    except Exception as e:
+        return False, 'window_probe_error:%s' % type(e).__name__
 
 
 def wait_for_playback_page(timeout=ZAP_PLAYBACK_TIMEOUT,
@@ -541,27 +545,39 @@ def wait_for_playback_page(timeout=ZAP_PLAYBACK_TIMEOUT,
     探测与等待分离，离线单测把 `time.sleep` 打桩即可确定性收敛。
     """
     start = time.time()
+    deadline = start + timeout
     max_polls = max(1, int(timeout / max(poll_interval, 0.001)) + 1)
     signal = 'not_polled'
+    polls = 0
+    # 2026-11-17 修复：原实现用 remaining 控 sleep，remaining<=0 时 sleep(0) 仍
+    # 继续跑满 max_polls 次；单次探测若耗时 >poll_interval，实际可空转 10 倍超时
+    # （uiautomator 30s×21≈213s）。改为硬 deadline：每次探测前先判 startTime 是否到期，
+    # 且把单次探测耗时计入，保证「最多等 timeout 秒」名副其实。
     for poll in range(1, max_polls + 1):
+        if time.time() >= deadline:
+            break
+        polls += 1
         ready, signal = _playback_page_ready()
         if ready:
             return True, {'ready': True, 'signal': signal,
-                          'wait_s': round(time.time() - start, 2), 'polls': poll}
-        if poll < max_polls:
-            remaining = timeout - (time.time() - start)
-            time.sleep(min(poll_interval, max(0.0, remaining)))
-    return False, {'ready': False, 'signal': signal, 'polls': max_polls,
+                          'wait_s': round(time.time() - start, 2), 'polls': polls}
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(poll_interval, remaining))
+    return False, {'ready': False, 'signal': signal, 'polls': polls,
                    'timeout_s': timeout, 'wait_s': round(time.time() - start, 2)}
 
 
-# ---- 阶段 2 判据（AF-PM 11-12）：IPTV 前台 + 窗口全屏 -------------------
-# 现读证据：IPTV app 不注册媒体会话，`dumpsys media_session` 恒为空，
-# 所以⛔ 不用 media_session 判播放态（永远假会一直拦住换台）。改用
-# `dumpsys window windows` 的 mCurrentFocus + mFrame / mDisplayFrame。
+# ---- 阶段 2 判据（11-13 真机取证修正）：IPTV 前台 + 窗口全屏 -------------------
+# 11-13 真机证据（data/reports/shots_20261113/FORENSIC.json）：
+#   · 本机 `dumpsys media_session` 恒为空 → ⛔ 不能用它判播放态（永远假会一直拦住换台）；
+#   · 本机 `dumpsys window windows` 根本不产 `mDisplayFrame` 字段
+#     （has_mDisplayFrame_in_whole_dump=false）→ 旧判据 mFrame==mDisplayFrame 恒为假。
+# 修正：改用本机确实存在的两条只读信号（mCurrentFocus + mFrame == wm size）。
 _WINDOW_FRAME_RE = re.compile(r'(mFrame|mDisplayFrame)=\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
 _IPTV_FOCUS_RE = re.compile(
-    r'^\s*mCurrentFocus=.*com\.android\.smart\.terminal\.iptv', re.M)
+    r'^\s*mCurrentFocus=.*' + re.escape(IPTV_PKG) + r'/', re.M)
 
 
 def _window_frames(text):
@@ -573,38 +589,52 @@ def _window_frames(text):
 
 
 def _iptv_window_block(text):
-    """按 `Window #N` 分块，挑出含 IPTV 包名的那块；找不到则退化为全文。"""
+    """按 `Window #N` 分块，只认同时含 IPTV 组件名与 mFrame 的窗口块；找不到返回 ''（fail-closed）。"""
     parts = re.split(r'(?=^\s*Window #\d+ )', text, flags=re.M)
     for p in parts:
-        if IPTV_PKG in p and 'mFrame=' in p:
+        if (IPTV_PKG + '/') in p and 'mFrame=' in p:
             return p
-    return text if IPTV_PKG in text else ''
+    return ''
+
+
+def _screen_size():
+    """只读 `wm size`，返回 [w, h]；解析失败 / 异常一律返回 None（fail-closed）。"""
+    try:
+        out = adb_shell_output('wm size', timeout=8) or ''
+    except Exception:
+        return None
+    sizes = re.findall(r'(\d+)x(\d+)', out)
+    return [int(sizes[-1][0]), int(sizes[-1][1])] if sizes else None
 
 
 def iptv_fullscreen_playing():
-    """阶段 2 判据：IPTV 前台 + 窗口全屏 → True；否则 / 异常 → False（fail-closed）。
+    """阶段 2 判据（11-13 真机取证修正）：IPTV 前台 + 窗口全屏 → True；否则 / 异常 → False（fail-closed）。
 
-    三条只读子判据（来自 `dumpsys window windows` 一次读取）：
-      ① `mCurrentFocus` 含 `com.android.smart.terminal.iptv`（IPTV 在前台）；
-      ② IPTV 窗口 `mFrame` 与 `mDisplayFrame` 都存在（有窗口几何）；
-      ③ 两者矩形同尺寸（全屏，非导航页/分屏/悬浮窗）。
-    ⛔ 不用 media_session（已证恒空返回）。**全程只读、零注入、零前台变更**；
-    `adb_shell_output` 异常一律返回 (False, detail)，由调用方零注入。
+    11-13 真机取证坐实两个「判据字段在本机不存在」的 P0：
+      · media_session 恒空、mDisplayFrame 字段本机不产 → 旧判据恒为假，
+        会把换台永久拦成 invalid_state（零注入）。
+    修正为两条本机确实存在的只读信号：
+      ① `mCurrentFocus` 行含 IPTV 组件名 `com.android.smart.terminal.iptv/`（IPTV 前台）；
+      ② 明确含 IPTV 组件名的窗口块内 `mFrame == [0,0,w,h]`（w,h 来自 `wm size`）→ 全屏。
+    ⛔ 不用 media_session、不用 mDisplayFrame。**全程只读、零注入、零前台变更**；
+    `adb_shell_output` 异常 / 字段缺失一律返回 (False, detail)，由调用方零注入。
     返回 (ok: bool, detail: dict)；detail 只含结构化字段，不打印 dumpsys 原文。
     """
     try:
         out = adb_shell_output('dumpsys window windows', timeout=10) or ''
+        screen = _screen_size()
     except Exception as e:
         return False, {'reason': 'dumpsys_window_unavailable', 'error': type(e).__name__}
     focus_ok = bool(_IPTV_FOCUS_RE.search(out))
     block = _iptv_window_block(out)
     frames = _window_frames(block)
-    mf, md = frames.get('mFrame'), frames.get('mDisplayFrame')
-    fullscreen = bool(mf and md and mf == md)
+    mf = frames.get('mFrame')
+    fullscreen = bool(screen and mf and mf == [0, 0, screen[0], screen[1]])
     detail = {
         'iptv_foreground': focus_ok,
         'mFrame': mf,
-        'mDisplayFrame': md,
+        'mDisplayFrame': frames.get('mDisplayFrame'),
+        'screen_size': screen,
         'fullscreen': fullscreen,
         'window_block_found': bool(block),
         'window_block_len': len(block),
@@ -675,7 +705,7 @@ def tool_zap(channel):
     no = channel_no_of(name)
     if no is None:
         return None, ERR_CHANNEL_NO_NUMBER, (
-            f'频道 "{name}" 无数字台号映射；请在 mytv 频道列表选择，或在 data/channel_numbers.json 补台号')
+            f'频道 "{name}" 无数字台号映射；请在 IPTV 频道列表选择，或在 data/channel_numbers.json 补台号')
 
     # 守卫第 1 级（AF-PM 11-12）：注入前断言 fg 是 IPTV，不是就 fail-closed 零注入。
     # B5/B7 都是前台被切走还照打，守卫放在工具层才拦得住；不再主动拉前台。
@@ -1175,7 +1205,7 @@ def tool_batch(actions):
 __all__ = [
     'MYTV_ACT', 'IPTV_PKG', 'IPTV_ACT', 'TVREMOTEIME_PKG', 'TVREMOTEIME_SVC', 'TVREMOTEIME_ACTION',
     'ZAP_FOREGROUND_TIMEOUT', 'ZAP_PLAYBACK_TIMEOUT', 'ZAP_PLAYBACK_POLL_INTERVAL', '_FG_LOCK',
-    'ensure_mytv_foreground', 'wait_for_playback_page', 'iptv_fullscreen_playing',
+    'ensure_iptv_foreground', 'ensure_mytv_foreground', 'wait_for_playback_page', 'iptv_fullscreen_playing',
     'tool_foreground', 'tool_keyevent', 'tool_tap', 'tool_swipe', 'tool_wait',
     'tool_wait_for_foreground',
     'get_current_ime', 'ensure_tvremoteime', 'tool_input_text',
