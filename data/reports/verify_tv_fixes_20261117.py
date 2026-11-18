@@ -86,6 +86,29 @@ ck('C5 无 livePath fail-closed', iptv.resolve_channel_from_livepath('noise line
 ck('C6 未映射 channel_id fail-closed',
    iptv.resolve_channel_from_livepath('setDataSource --livePath--->rtsp://h/PLTV/88888895/224/999999/x_0.smil')[1]
    == 'channel_id_unmapped')
+# 2026-11-18 真机反例：当前 IPTV 版本日志不挂 setDataSource tag，但 RTSP URL 在
+ck('C7 URL 不绑 tag 也解出 channel_id', iptv.parse_channel_id_from_url(
+   '11-18 CTCPlayer: rtsp://h/PLTV/88888895/224/3221228036/0000_0.smil?a=SECRET') == '3221228036')
+ck('C8 URL 解析认证串零回传',
+   'SECRET' not in str(iptv.parse_channel_id_from_url('rtsp://h/PLTV/1/2/3221228036/x_0.smil?a=SECRET')))
+ck('C9 无 tag 的 livePath 文本也能 resolve', iptv.resolve_channel_from_livepath(
+   'rtsp://h/PLTV/88888895/224/3221226759/0000_0.smil')[0] == 21)
+# 多位数注入节奏（2026-11-18 修正只写首位缺陷）
+zk = ast.parse(src)
+zg = [n for n in zk.body if isinstance(n, ast.Assign)
+      and any(isinstance(t, ast.Name) and t.id == 'ZAP_DIGIT_GAP_S' for t in n.targets)]
+# 值是 float(os.environ.get('KEY','0.6'))：从嵌套 get 的第二个参数取默认
+zg_val = 0.0
+if zg:
+    for sub in ast.walk(zg[0].value):
+        if (isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr == 'get' and len(sub.args) >= 2
+                and isinstance(sub.args[1], ast.Constant)):
+            try:
+                zg_val = float(sub.args[1].value)
+            except (ValueError, TypeError):
+                pass
+ck('C10 多位数位间间隔>=0.5s（修只写首位）', zg_val >= 0.5, zg_val)
 
 # ---- D runner.read_frame 可信 S4 ----
 FAKE_LOG = 'setDataSource --livePath--->rtsp://h/PLTV/88888895/224/3221226759/0000_0.smil'

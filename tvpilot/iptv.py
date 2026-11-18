@@ -73,29 +73,53 @@ def get_current_channel_from_logcat():
         return None
 
 
-# ---- 2026-11-17：换台瞬间从 CTCMediaPlayer 的 livePath 日志解可信台号 ----
+# ---- 2026-11-17：换台瞬间从日志里的 RTSP 直播源 URL 解可信台号 ----
 # 文档 `doc/archive/电信IPTV_RTSP地址抓取流程.md`：换台瞬间 logcat 输出
 #   CTCMediaPlayer: MediaPlayer > setDataSource --livePath--->rtsp://.../PLTV/88888895/224/{channel_id}/{stream_id}_0.smil...
-# channel_id / stream_id 固定，可反解台号。⚠ 该行只在换台瞬间出现、非常驻，
-# 必须「清 logcat → 注入台号 → 等 7-12s → 抓 setDataSource」同步进行。
-_LIVEPATH_RE = re.compile(
-    r'setDataSource\s*--livePath--->\s*(rtsp://[^\s]+/PLTV/\d+/\d+/(\d+)/[^_\s]+_0\.smil)')
+# channel_id / stream_id 固定，可反解台号。
+# ★ 2026-11-18 真机修正：当前 IPTV 版本换台时该行**不挂 setDataSource tag**
+#   （实测 setDataSource=0/livePath=0，但 PLTV=1 且能解出 channel_id）。
+#   故判据改为「不绑 tag 的 RTSP URL 结构匹配」，tag 形式仅作优先、URL 兜底。
+#   ⚠ URL 只在换台瞬间出现、非常驻；须「清 logcat→注入台号→等 7-12s→抓」同步进行。
+#   URL 含认证串，全程只回 channel_id 一个整数，凭据零打印。
+_LIVEPATH_TAGGED_RE = re.compile(
+    r'setDataSource\s*--livePath--->\s*rtsp://[^\s]+/PLTV/\d+/\d+/(\d+)/[^_\s]+_0\.smil')
+# 不绑 tag：任意行里的 RTSP URL，路径形如 /PLTV/<a>/<b>/<channel_id>/<stream>_0.smil
+_RTSP_URL_RE = re.compile(
+    r'rtsp://[^\s"\'<>]+/PLTV/\d+/\d+/(\d+)/[^_\s"\'<>]+_0\.smil')
 _channel_id_to_no = None   # 懒加载 {channel_id(str): 台号(int)}
 
 
-def parse_channel_id_from_logcat(text):
-    """从一段 logcat 文本解析最新 livePath 的 channel_id（纯函数，不连设备）。
+def parse_channel_id_from_url(text):
+    """纯函数：从任意文本（一行日志）按 RTSP URL 结构解 channel_id，不绑 tag。
+    只回 channel_id，不回完整 URL（认证串零打印）。
+    """
+    if not text:
+        return None
+    m = _RTSP_URL_RE.search(text)
+    return m.group(1) if m else None
 
-    :return: (channel_id:str|None, matched_rtsp:bool) —— 只回 channel_id，不回完整
-             URL（URL 含认证串，凭据零打印）；无命中返回 (None, False)。
+
+def parse_channel_id_from_logcat(text):
+    """从一段 logcat 文本解析最近一次换台的 channel_id（纯函数，不连设备）。
+
+    优先取带 `setDataSource --livePath` tag 的行；无则退回任意 RTSP URL 结构行。
+    :return: (channel_id:str|None, matched_rtsp:bool) —— 只回 channel_id，不回完整 URL。
     """
     if not text:
         return None, False
     found = None
-    for line in text.splitlines():
-        m = _LIVEPATH_RE.search(line)
+    lines = text.splitlines()
+    # 兜底优先：最后一条 RTSP URL 结构行（当前真机版本走这条）
+    for line in lines:
+        cid = parse_channel_id_from_url(line)
+        if cid:
+            found = cid
+    # tag 形式若存在，覆盖为最后一条带 tag 的（更精确）
+    for line in lines:
+        m = _LIVEPATH_TAGGED_RE.search(line)
         if m:
-            found = m.group(2)     # 取最后一条（最近一次换台）
+            found = m.group(1)
     return (found, found is not None)
 
 
