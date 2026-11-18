@@ -44,19 +44,22 @@ class ADBRunner:
         # 注入式，离线测试可喂假 logcat；None ⇒ 默认走 _read_livepath_logcat()。
         self.livepath_reader = livepath_reader
         self.last_evidence = {}   # 每次采集的原始读数，供验收窗留证
+        self._livepath_text = ''  # 2026-11-18：zap 成功后立刻抓的 logcat，供 read_frame 复用
 
     @staticmethod
     def _read_livepath_logcat():
-        """默认 livePath 读取器：抓保留的最近 logcat，按 CTCMediaPlayer 过滤。
+        """默认 livePath 读取器（2026-11-18 第三笔修双 bug）。
 
-        ⚠ livePath 只在换台瞬间输出；编排里 read_frame 紧接 zap 之后调用，此时
-        该行应仍在环形缓冲中。若已被冲掉 ⇒ 解不出 channel_id ⇒ S4 unknown+reason
-        （fail-closed，⛔ 不回退到不可信的 LastchannelID/缓存）。
+        旧实现两处缺陷：① `grep -F "livePath"` 关键词虚——真机 RTSP URL 行 tag 是
+        `IPTVPlayer`、内容含 `PLTV` 但不含 `livePath` 字面，必然 0 行；② `-t 2000`
+        窗口窄——播放日志每秒几十行，换台后到抓取已过 11s，行被冲出窗口。
+        现改为抓 `logcat -b all -d` 全文（约 1-2s、timeout 给 15s 含解析余量），
+        直接返回全文交给不绑 tag 的 URL 正则 `parse_channel_id_from_logcat`。
+        ⛔ 不回退 LastchannelID/缓存；抓不到即 S4 unknown+reason（fail-closed）。
         """
         try:
             from tvpilot import adb
-            return adb.adb_shell_output('logcat -b all -d -t 2000 | grep -F "livePath" | tail -5',
-                                        timeout=10) or ''
+            return adb.adb_shell_output('logcat -b all -d', timeout=15) or ''
         except Exception:
             return ''
 
@@ -115,13 +118,31 @@ class ADBRunner:
 
     # 4. 换台：复用 tool_zap（逐位数字键注入 + 两级播放页守卫）
     def zap(self, channel_no):
-        from tvpilot import tools
+        from tvpilot import tools, iptv
         data, err, msg = tools.tool_zap(str(channel_no))
         ok = (err is None and msg is None)
         self.last_evidence['zap'] = {
             'channel_no': channel_no, 'ok': ok, 'err': err,
             'method': (data or {}).get('method'),
         }
+        # 2026-11-18 第三笔：换台成功后**立刻**抓 logcat 全文存下，缩小 RTSP URL
+        # 行被播放日志冲出的窗口（原实现到 read_frame 才抓、已过 11s 被冲掉）。
+        # ★ 链主复核补：logcat -d 全文必非空，「不空」不等于「有 URL 行」——只有
+        #   真的解出 channel_id 才认这份缓存；解不出就留空，让 read_frame 现抓兜底，
+        #   ⛔ 否则静默 FAIL（缓存看似有、实则无 URL）。
+        self._livepath_text = ''
+        if ok:
+            txt = ''
+            cid = None
+            try:
+                reader = self.livepath_reader or self._read_livepath_logcat
+                txt = reader() or ''
+                _no, _r, cid = iptv.resolve_channel_from_livepath(txt)
+            except Exception:
+                cid = None
+            self._livepath_text = txt if cid else ''
+            self.last_evidence['zap']['livepath_chars'] = len(txt)
+            self.last_evidence['zap']['livepath_cid'] = cid
         return ok
 
     # 5. 单次调用内连续采集 S3/S4/S7 + 播放旁证（同帧近似，共用 checked_at）
@@ -143,12 +164,15 @@ class ADBRunner:
                 except Exception:
                     playing = False
 
-            # S4 可信台号：换台瞬间 livePath → channel_id → 台号
-            reader = self.livepath_reader or self._read_livepath_logcat
-            try:
-                logcat_text = reader()
-            except Exception:
-                logcat_text = ''
+            # S4 可信台号：优先用 zap 成功后立刻抓的 logcat（窗口最小），
+            # 没有才现抓兜底（如 ADB-off 腿未换台的情形）。
+            logcat_text = self._livepath_text
+            if not logcat_text:
+                reader = self.livepath_reader or self._read_livepath_logcat
+                try:
+                    logcat_text = reader() or ''
+                except Exception:
+                    logcat_text = ''
             s4_no, s4_reason, cid = iptv.resolve_channel_from_livepath(logcat_text)
 
             last_id = None

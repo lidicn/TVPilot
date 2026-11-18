@@ -109,6 +109,37 @@ if zg:
             except (ValueError, TypeError):
                 pass
 ck('C10 多位数位间间隔>=0.5s（修只写首位）', zg_val >= 0.5, zg_val)
+# ---- 第三笔：reader 双 bug 修复（关键词虚 + 窗口窄）----
+_rsrc = open(os.path.join(_PKG, 'af_morning_news_runner.py'), encoding='utf-8').read()
+_rtree = ast.parse(_rsrc)
+# _read_livepath_logcat 是 ADBRunner 类方法，需进 ClassDef.body 找
+_rclass = [n for n in _rtree.body if isinstance(n, ast.ClassDef) and n.name == 'ADBRunner'][0]
+_rfn = [n for n in _rclass.body if isinstance(n, ast.FunctionDef)
+        and n.name == '_read_livepath_logcat'][0]
+_rbody = ast.get_source_segment(_rsrc, _rfn) or ''
+# 只扫真实 adb_shell_output 调用实参，排除 docstring（旧命令在说明里会自指）
+_rreal = [n for n in _rfn.body if not (isinstance(n, ast.Expr)
+          and isinstance(getattr(n, 'value', None), ast.Constant)
+          and isinstance(n.value.value, str))]
+_cmd_args = []
+for top in _rreal:
+    for n in ast.walk(top):
+        if not isinstance(n, ast.Call) or not n.args or not isinstance(n.args[0], ast.Constant):
+            continue
+        _f = n.func
+        _is_shell = ((isinstance(_f, ast.Name) and _f.id == 'adb_shell_output') or
+                     (isinstance(_f, ast.Attribute) and _f.attr == 'adb_shell_output'))
+        if _is_shell:
+            _cmd_args.append(n.args[0].value)
+_actual_cmd = ' '.join(str(x) for x in _cmd_args)
+ck('C11 reader 不再 grep livePath 关键词', 'livePath' not in _actual_cmd
+   and 'grep' not in _actual_cmd, _actual_cmd[:120])
+ck('C12 reader 抓 logcat 全文(-b all -d)', 'logcat -b all -d' in _actual_cmd, _actual_cmd[:120])
+ck('C13 zap 成功后缓存 livepath 文本', '_livepath_text' in _rsrc
+   and 'livepath_chars' in _rsrc)
+# 真机那行格式（IPTVPlayer tag + PLTV URL，无 livePath 字面）能被不绑 tag 正则解
+ck('C14 真机IPTVPlayer行格式可解channel_id', iptv.parse_channel_id_from_logcat(
+   '11-18 IPTVPlayer: [Send:400] GET_PARAMETER rtsp://h/PLTV/88888895/224/3221228036/0000_0.smil?a=SECRET')[0] == '3221228036')
 
 # ---- D runner.read_frame 可信 S4 ----
 FAKE_LOG = 'setDataSource --livePath--->rtsp://h/PLTV/88888895/224/3221226759/0000_0.smil'
@@ -138,6 +169,27 @@ f_bad = r_bad.read_frame()
 ck('D4 无 livePath ⇒ reason 非空（⛔ 缓存冒充）',
    f_bad.reason in ('livepath_absent', 'channel_unresolved', 's4_not_cctv1'), f_bad.reason)
 ck('D5 假态 frame 不可达 iptv_ok', decide_iptv_ok(f_bad)[0] is False)
+# 链主复核补丁：zap 抓到全文但无 URL 行 ⇒ 缓存不认，read_frame 必须现抓（reader 2 次）。
+# 用可计数 fake reader + 假 tool_zap，避免真机。
+class _CountingReader:
+    def __init__(self): self.n = 0
+    def __call__(self):
+        self.n += 1
+        # 第 1 次（zap）：全量 dump 但无 RTSP URL 行；第 2 次（read_frame 兜底）：给真行
+        return ('noise log line\n' if self.n == 1 else FAKE_LOG)
+import types as _t
+_fake_tools = _t.ModuleType('tvpilot.tools')
+_fake_tools.tool_zap = lambda ch: ({'method': 'adb_digits'}, None, None)
+sys.modules['tvpilot.tools'] = _fake_tools
+_tvpkg.tools = _fake_tools
+_cnt = _CountingReader()
+r_retry = ADBRunner(livepath_reader=_cnt)
+zret = r_retry.zap(21)
+f_retry = r_retry.read_frame()
+ck('D6 zap解不出cid则不认缓存(缓存留空)', r_retry._livepath_text == '', repr(r_retry._livepath_text))
+ck('D7 无URL行时read_frame现抓(reader调用2次)', _cnt.n == 2, _cnt.n)
+ck('D8 兜底抓到URL行⇒s4可信21', r_retry.last_evidence['read_frame'].get('s4_trusted_no') == 21)
+ck('D9 livepath_cid写入zap evidence', r_retry.last_evidence['zap'].get('livepath_cid') in (None, '3221226759'))
 
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))
