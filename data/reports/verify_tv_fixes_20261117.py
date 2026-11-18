@@ -132,11 +132,35 @@ for top in _rreal:
         if _is_shell:
             _cmd_args.append(n.args[0].value)
 _actual_cmd = ' '.join(str(x) for x in _cmd_args)
-ck('C11 reader 不再 grep livePath 关键词', 'livePath' not in _actual_cmd
-   and 'grep' not in _actual_cmd, _actual_cmd[:120])
-ck('C12 reader 抓 logcat 全文(-b all -d)', 'logcat -b all -d' in _actual_cmd, _actual_cmd[:120])
-ck('C13 zap 成功后缓存 livepath 文本', '_livepath_text' in _rsrc
-   and 'livepath_chars' in _rsrc)
+# 2026-11-19 第四笔：命令走类常量 LIVEPATH_CMD，从 AST 取该常量值
+_lcmd = ''
+for n in _rtree.body:
+    if isinstance(n, ast.ClassDef) and n.name == 'ADBRunner':
+        for sub in n.body:
+            if isinstance(sub, ast.Assign) and any(
+                    isinstance(t, ast.Name) and t.id == 'LIVEPATH_CMD' for t in sub.targets):
+                if isinstance(sub.value, ast.Constant):
+                    _lcmd = sub.value.value
+ck('C11 reader 用 grep URL结构(-e rtsp:// -e PLTV),不用作废livePath字面',
+   'grep -E -i' in _lcmd and "-e 'rtsp://'" in _lcmd and '-e PLTV' in _lcmd
+   and 'livePath' not in _lcmd, _lcmd[:160])
+# 2026-11-19 Chief 实测：-b main 那条 URL 行 0 命中，必须 -b all；-t 1500 限窗；不裸抓 -d 全文
+ck('C12 reader 用-b all限窗(-t 1500),不用main也不裸抓全文',
+   '-b all' in _lcmd and '-t 1500' in _lcmd and '-b main' not in _lcmd
+   and '-d' not in _lcmd, _lcmd[:160])
+ck('C13 zap前清缓冲+zap后缓存+三数evidence', all(k in _rsrc for k in
+   ('LIVEPATH_CLEAR_CMD', 'logcat -c', '_livepath_text',
+    'livepath_ms', 'livepath_lines', 'livepath_chars')))
+# timeout 15s（Chief 实测 10s 偶发超）
+_to = [n for n in _rtree.body if isinstance(n, ast.ClassDef) and n.name == 'ADBRunner']
+_tov = 0
+for cl in _to:
+    for sub in cl.body:
+        if isinstance(sub, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == 'LIVEPATH_TIMEOUT_S' for t in sub.targets):
+            if isinstance(sub.value, ast.Constant):
+                _tov = sub.value.value
+ck('C15 reader timeout=15s(实测10s偶发超)', _tov == 15, _tov)
 # 真机那行格式（IPTVPlayer tag + PLTV URL，无 livePath 字面）能被不绑 tag 正则解
 ck('C14 真机IPTVPlayer行格式可解channel_id', iptv.parse_channel_id_from_logcat(
    '11-18 IPTVPlayer: [Send:400] GET_PARAMETER rtsp://h/PLTV/88888895/224/3221228036/0000_0.smil?a=SECRET')[0] == '3221228036')
@@ -190,6 +214,46 @@ ck('D6 zap解不出cid则不认缓存(缓存留空)', r_retry._livepath_text == 
 ck('D7 无URL行时read_frame现抓(reader调用2次)', _cnt.n == 2, _cnt.n)
 ck('D8 兜底抓到URL行⇒s4可信21', r_retry.last_evidence['read_frame'].get('s4_trusted_no') == 21)
 ck('D9 livepath_cid写入zap evidence', r_retry.last_evidence['zap'].get('livepath_cid') in (None, '3221226759'))
+# ⑧ launch 前台短路：已在前台⇒不调 monkey 且 ok=already；不在前台⇒仍走 monkey
+_monk = {'n': 0}
+_fake_tools.tool_launch_app = lambda pkg: (_monk.__setitem__('n', _monk['n'] + 1) or
+                                           ({'launched': True, 'method': 'adb'}, None, None))
+r_already = ADBRunner()
+_fg_orig = _stub.get_foreground_pkg
+_stub.get_foreground_pkg = lambda force_refresh=False: 'com.android.smart.terminal.iptv'
+ok_already = r_already.launch_iptv()
+ck('D10 已在前台⇒ok且method=already', ok_already is True and
+   r_already.last_evidence['launch_iptv'].get('method') == 'already')
+ck('D11 已在前台⇒不调monkey', _monk['n'] == 0, _monk['n'])
+# 不在前台⇒走 monkey
+_stub.get_foreground_pkg = lambda force_refresh=False: 'com.mitv.tvhome'
+r_cold = ADBRunner()
+ok_cold = r_cold.launch_iptv()
+ck('D12 不在前台⇒仍走monkey(调用1次)', ok_cold is True and _monk['n'] == 1, _monk['n'])
+_stub.get_foreground_pkg = _fg_orig  # 恢复
+# 第四笔 evidence 三数
+ck('D13 reader代价ms/lines/chars在evidence', all(k in r_retry.last_evidence['zap']
+   for k in ('livepath_ms', 'livepath_lines', 'livepath_chars')))
+# 链末措辞：按异常类型分，不按耗时猜——正常空⇒reader_empty(no_match)，超时⇒reader_timeout
+import subprocess as _sp
+def _reader_empty(): return ''   # grep 无匹配⇒空串（真机"正常但没URL行"的真实返回）
+def _reader_timeout(): raise _sp.TimeoutExpired('logcat', 15)
+r_empty = ADBRunner(livepath_reader=_reader_empty)
+r_empty.zap(21)
+ck('D14 正常返回但空⇒reader_empty(no_match)',
+   r_empty.last_evidence['zap'].get('livepath_reader_status') == 'reader_empty(no_match)',
+   r_empty.last_evidence['zap'].get('livepath_reader_status'))
+r_to = ADBRunner(livepath_reader=_reader_timeout)
+r_to.zap(21)
+ck('D15 TimeoutExpired⇒reader_timeout',
+   r_to.last_evidence['zap'].get('livepath_reader_status') == 'reader_timeout',
+   r_to.last_evidence['zap'].get('livepath_reader_status'))
+# 默认 reader 源码按异常类型分（不按 ms 阈值）
+_rsrc_now = open(os.path.join(_PKG, 'af_morning_news_runner.py'), encoding='utf-8').read()
+ck('D16 reader 按异常类型分不按ms阈值',
+   'except subprocess.TimeoutExpired' in _rsrc_now
+   and 'reader_empty(no_match)' in _rsrc_now
+   and '_livepath_status' in _rsrc_now)
 
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))

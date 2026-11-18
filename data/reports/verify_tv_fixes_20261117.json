@@ -1,8 +1,8 @@
 {
   "date": "2026-11-17",
   "scope": "电视联动三要素修复离线验收（零真机/零MQTT/零凭据）",
-  "checks_total": 37,
-  "checks_pass": 37,
+  "checks_total": 45,
+  "checks_pass": 45,
   "checks_failed": [],
   "exit_code": 0,
   "new_branches": [

@@ -45,22 +45,45 @@ class ADBRunner:
         self.livepath_reader = livepath_reader
         self.last_evidence = {}   # 每次采集的原始读数，供验收窗留证
         self._livepath_text = ''  # 2026-11-18：zap 成功后立刻抓的 logcat，供 read_frame 复用
+        self._livepath_ms = 0.0   # 2026-11-19：reader 耗时(ms)，写进 evidence 报代价
 
-    @staticmethod
-    def _read_livepath_logcat():
-        """默认 livePath 读取器（2026-11-18 第三笔修双 bug）。
+    # 2026-11-19 第四笔（Chief 实测修正）：设备端过滤、压回传量。
+    #  · 第三笔 `logcat -b all -d` 全文真机 15s/20s 拉不回 → 空串 → livepath_absent。
+    #  · 链主原方案 `-b main` 实测 0 行——RTSP 行不在 main buffer（在 all/system），
+    #    故退回 `-b all`；`-b all -t 3000|grep` 实测 716 字节/8.89s 能抓到。
+    #  · zap 前 `logcat -c` 清缓冲 ⇒ 清后窗口小、必含本次换台行，用 -t 1500 足够。
+    LIVEPATH_CMD = "logcat -b all -t 1500 | grep -E -i -e 'rtsp://' -e PLTV"
+    LIVEPATH_CLEAR_CMD = 'logcat -c'
+    LIVEPATH_TIMEOUT_S = 15
 
-        旧实现两处缺陷：① `grep -F "livePath"` 关键词虚——真机 RTSP URL 行 tag 是
-        `IPTVPlayer`、内容含 `PLTV` 但不含 `livePath` 字面，必然 0 行；② `-t 2000`
-        窗口窄——播放日志每秒几十行，换台后到抓取已过 11s，行被冲出窗口。
-        现改为抓 `logcat -b all -d` 全文（约 1-2s、timeout 给 15s 含解析余量），
-        直接返回全文交给不绑 tag 的 URL 正则 `parse_channel_id_from_logcat`。
-        ⛔ 不回退 LastchannelID/缓存；抓不到即 S4 unknown+reason（fail-closed）。
+    def _read_livepath_logcat(self):
+        """默认 livePath 读取器（2026-11-19 第四笔，Chief 实测定参）。
+
+        - 命令 `logcat -b all -t 1500 | grep -E -i -e 'rtsp://' -e PLTV`，timeout 15s：
+          `-b all`（不用 main——RTSP 行不在 main buffer）、设备端过滤只回几行、
+          `-t 1500` 限窗；配合 zap 前的 `logcat -c` 清缓冲，必含本次换台行。
+        - 代价记到 self._livepath_ms（毫秒）：evidence 报 ms/lines/chars 三数，
+          ⛔ 不只报「有没有」。状态记到 self._livepath_status（按异常类型分，不按耗时猜）：
+          TimeoutExpired⇒'reader_timeout'、其它异常⇒'reader_error:<type>'、正常返回⇒''（
+          此时若空则由 zap 标 'reader_empty(no_match)'）。⛔ 不按 ms 阈值猜 timeout，
+          避免 8.89s 空匹配被误标超时（Chain/Chief 定）。空串⇒S4 fail-closed。
         """
+        import subprocess
+        from tvpilot import adb
+        t0 = time.time()
+        self._livepath_ms = 0.0
+        self._livepath_status = ''
         try:
-            from tvpilot import adb
-            return adb.adb_shell_output('logcat -b all -d', timeout=15) or ''
-        except Exception:
+            out = adb.adb_shell_output(self.LIVEPATH_CMD, timeout=self.LIVEPATH_TIMEOUT_S) or ''
+            self._livepath_ms = round((time.time() - t0) * 1000, 1)
+            return out
+        except subprocess.TimeoutExpired:
+            self._livepath_ms = round((time.time() - t0) * 1000, 1)
+            self._livepath_status = 'reader_timeout'
+            return ''
+        except Exception as exc:
+            self._livepath_ms = round((time.time() - t0) * 1000, 1)
+            self._livepath_status = 'reader_error:%s' % type(exc).__name__
             return ''
 
     # 1. 唤醒：只校验已在线/亮屏，⛔ 不做电源唤醒
@@ -108,17 +131,36 @@ class ADBRunner:
 
     # 3. IPTV 全屏：复用 tool_launch_app（monkey 起 LAUNCHER）
     def launch_iptv(self):
-        from tvpilot import tools
+        """⑧ 短路（2026-11-19）：语义是「确保 app 在前台」。若前台已是 IPTV_PKG，
+        直接 ok(method=already)、⛔ 不调 monkey——monkey 对已在前台的 app 不发
+        `Events injected: 1`，会假失败（playing 与否都短路，播不播是后续步骤的事）。"""
+        from tvpilot import state, tools
+        fg = state.get_foreground_pkg(force_refresh=True)
+        if fg and IPTV_PKG in fg:
+            self.last_evidence['launch_iptv'] = {
+                'ok': True, 'method': 'already', 'foreground': fg,
+            }
+            return True
         data, err, msg = tools.tool_launch_app(IPTV_PKG)
         ok = (err is None and msg is None and bool((data or {}).get('launched')))
         self.last_evidence['launch_iptv'] = {
             'ok': ok, 'err': err, 'foreground': (data or {}).get('foreground'),
+            'method': (data or {}).get('method'),
         }
         return ok
 
     # 4. 换台：复用 tool_zap（逐位数字键注入 + 两级播放页守卫）
     def zap(self, channel_no):
+        import subprocess
         from tvpilot import tools, iptv
+        # 2026-11-19 第四笔（Chief 建议）：注入前清 logcat 缓冲，保证随后的
+        # livePath 抓取窗口必含本次换台行（URL 行流动、几分钟就被冲掉）。
+        # 清缓冲是只读运维动作、不改变电视状态；失败也不阻断换台。
+        try:
+            from tvpilot import adb
+            adb.adb_cmd(self.LIVEPATH_CLEAR_CMD)
+        except Exception:
+            pass
         data, err, msg = tools.tool_zap(str(channel_no))
         ok = (err is None and msg is None)
         self.last_evidence['zap'] = {
@@ -134,15 +176,30 @@ class ADBRunner:
         if ok:
             txt = ''
             cid = None
+            # 2026-11-19：reader 前重置代价/状态（注入式 fake reader 可能不写它们）
+            self._livepath_ms = 0.0
+            self._livepath_status = ''
             try:
                 reader = self.livepath_reader or self._read_livepath_logcat
                 txt = reader() or ''
                 _no, _r, cid = iptv.resolve_channel_from_livepath(txt)
+            except subprocess.TimeoutExpired:
+                self._livepath_status = 'reader_timeout'
+                cid = None
             except Exception:
                 cid = None
             self._livepath_text = txt if cid else ''
+            # 链主要求：evidence 带 ms/lines/chars 三数，⛔ 不只报有没有
+            self.last_evidence['zap']['livepath_ms'] = self._livepath_ms
+            self.last_evidence['zap']['livepath_lines'] = len([l for l in txt.splitlines() if l.strip()])
             self.last_evidence['zap']['livepath_chars'] = len(txt)
             self.last_evidence['zap']['livepath_cid'] = cid
+            # 仍空 ⇒ 按异常类型分状态（不按耗时猜）：
+            #   TimeoutExpired⇒reader_timeout、其它异常⇒reader_error、正常空⇒reader_empty(no_match)
+            # fail-closed 的 S4 reason 由 resolve 给，这里只是证据措辞，别误标误导复盘。
+            if not txt:
+                self.last_evidence['zap']['livepath_reader_status'] = (
+                    self._livepath_status or 'reader_empty(no_match)')
         return ok
 
     # 5. 单次调用内连续采集 S3/S4/S7 + 播放旁证（同帧近似，共用 checked_at）
