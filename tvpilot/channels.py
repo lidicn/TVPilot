@@ -133,9 +133,47 @@ def normalize_channel(name):
 _reload_channel_numbers(force=True)
 
 
+# 2026-11-19 第五笔 ⑬：外挂 data 卷缺 channel_numbers.json 时从镜像 seed 自愈拷入，
+# 并强制重建 channel_id→台号 映射；MAP_SIZE=0 ⇒ 启动即报错（不再静默 fail-open）。
+CHANNEL_NUMBERS_SEED = os.path.join(_PROJECT_ROOT, 'data_seed', 'channel_numbers.json')
+
+
+def ensure_channel_map_ready():
+    """启动自检（⑬）：确保外挂 data 卷有台号表且 channel_id 映射非空。
+
+    :return: (ok: bool, detail: dict)。ok=False ⇒ 调用方应拒绝启动、如实报错。
+    镜像构建期把 data/channel_numbers.json COPY 到 /app/data_seed/；外挂卷
+    /app/data 会遮蔽镜像内同路径，但遮蔽不了 data_seed，故可自愈拷回。
+    ⛔ 只碰本地文件、不连设备、不碰凭据。
+    """
+    import shutil
+    detail = {'target': CHANNEL_NUMBERS_FILE, 'seed': CHANNEL_NUMBERS_SEED}
+    copied = False
+    if not os.path.exists(CHANNEL_NUMBERS_FILE) and os.path.exists(CHANNEL_NUMBERS_SEED):
+        try:
+            os.makedirs(os.path.dirname(CHANNEL_NUMBERS_FILE), exist_ok=True)
+            shutil.copyfile(CHANNEL_NUMBERS_SEED, CHANNEL_NUMBERS_FILE)
+            copied = True
+        except Exception as exc:
+            detail['copy_error'] = type(exc).__name__
+    detail['copied_from_seed'] = copied
+    _reload_channel_numbers(force=True)
+    # 强制重建 iptv 的 channel_id→台号 映射（__main__ 尚未 resolve，缓存为空；force 保险）
+    try:
+        from tvpilot import iptv
+        iptv._channel_id_to_no = None
+        cmap = iptv._load_channel_id_to_no()
+    except Exception as exc:
+        detail['iptv_map_error'] = type(exc).__name__
+        cmap = {}
+    detail['map_size'] = len(cmap)
+    detail['ok'] = bool(cmap)
+    return detail['ok'], detail
+
+
 __all__ = [
     'CH_FILE', 'CHANNEL_NUMBERS_FILE', 'NAMES',
     '_load_names', '_reload_channel_numbers',
     'channel_no_of', 'channel_name_of_no', 'channel_numbers_map',
-    'normalize_channel', '_ALIAS', '_CN_NUM',
+    'normalize_channel', '_ALIAS', '_CN_NUM', 'ensure_channel_map_ready',
 ]

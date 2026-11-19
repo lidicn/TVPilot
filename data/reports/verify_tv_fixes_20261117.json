@@ -1,8 +1,8 @@
 {
   "date": "2026-11-17",
   "scope": "电视联动三要素修复离线验收（零真机/零MQTT/零凭据）",
-  "checks_total": 45,
-  "checks_pass": 45,
+  "checks_total": 71,
+  "checks_pass": 71,
   "checks_failed": [],
   "exit_code": 0,
   "new_branches": [
@@ -10,7 +10,13 @@
     "硬deadline",
     "livePath channel_id反解台号",
     "可信S4/fail-closed",
-    "认证串零回传"
+    "认证串零回传",
+    "流式reader(全量优先/--pid env开关备用/动态窗口/可靠kill)",
+    "gap=1.0",
+    "成对报数",
+    "全量流体量三数",
+    "⑬部署seed/MAP_SIZE自检",
+    "孤儿流abort/窗口60s封顶"
   ],
   "products_hash_stable": true
 }

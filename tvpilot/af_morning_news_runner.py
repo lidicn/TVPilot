@@ -22,12 +22,18 @@
 """
 from __future__ import annotations
 
+import os
 import time
 
 from tvpilot.af_morning_news import Frame, s7_state
 
 IPTV_PKG = 'com.android.smart.terminal.iptv'
 CCTV1_NO = 21
+# 2026-11-19 链主改判：PID 过滤留作备用、默认关。今晚三轮全栽在「读不到日志」，
+# 不赌「RTSP 行 100% 出自 IPTV 主进程」（tag 是 IPTVPlayer，但 [Send:400] 可能是 helper）。
+# 第一次运行走全量流（30MB/32万行容器可承受、Python 解析 1-2s），记 bytes/lines/parse_ms；
+# 只有实测证明体量/解析拖慢，第二次运行才置 TVPILOT_LIVEPATH_PID_FILTER=1 切 --pid。
+LIVEPATH_PID_FILTER = os.environ.get('TVPILOT_LIVEPATH_PID_FILTER', '0') == '1'
 
 
 class ADBRunner:
@@ -46,6 +52,15 @@ class ADBRunner:
         self.last_evidence = {}   # 每次采集的原始读数，供验收窗留证
         self._livepath_text = ''  # 2026-11-18：zap 成功后立刻抓的 logcat，供 read_frame 复用
         self._livepath_ms = 0.0   # 2026-11-19：reader 耗时(ms)，写进 evidence 报代价
+        # 2026-11-19 第五笔：流式 logcat 会话句柄（Popen + 临时文件）。起流在 logcat -c
+        # 之后、注入之前；收流在 zap 返回后。None ⇒ 未起流（注入式 reader/起流失败），
+        # 收流退回默认快照 reader（fail-closed 由解析保证）。
+        self._livepath_stream = None
+        self._stream_was_used = False    # 本次是否走了真实流（evidence 留证）
+        # 链主改判报数三量：全量流的体积/行数/解析耗时（初轮体量实测留证）
+        self._stream_bytes = 0
+        self._stream_lines = 0
+        self._parse_ms = 0.0
 
     # 2026-11-19 第四笔（Chief 实测修正）：设备端过滤、压回传量。
     #  · 第三笔 `logcat -b all -d` 全文真机 15s/20s 拉不回 → 空串 → livepath_absent。
@@ -55,6 +70,15 @@ class ADBRunner:
     LIVEPATH_CMD = "logcat -b all -t 1500 | grep -E -i -e 'rtsp://' -e PLTV"
     LIVEPATH_CLEAR_CMD = 'logcat -c'
     LIVEPATH_TIMEOUT_S = 15
+    # 2026-11-19 第五笔（Chief 实测三修）：独立 logcat 流 + --pid 过滤 + 动态窗口。
+    # 起流 logcat -c 后、注入前（此时 launch 已完成、pidof 取得到 IPTV PID）；收流在
+    # zap 返回后。总窗口 = max(TOTAL, zap耗时 + TAIL_MIN)——取代早先固定 25s 总窗
+    # （守卫满 20s 时收尾被压到 5s 的问题），保证收尾至少 10s。STOP_WAIT 是 terminate→kill 宽限。
+    STREAM_CMD_TAIL = ('logcat', '-b', 'all', '-v', 'threadtime')
+    STREAM_TOTAL_WINDOW_S = 25
+    STREAM_TAIL_MIN_S = 10
+    STREAM_WINDOW_CAP_S = 60      # Chief 复核补：窗口上限，防 zap 异常拖长顶破 240s 预算
+    STREAM_STOP_WAIT_S = 2
 
     def _read_livepath_logcat(self):
         """默认 livePath 读取器（2026-11-19 第四笔，Chief 实测定参）。
@@ -85,6 +109,158 @@ class ADBRunner:
             self._livepath_ms = round((time.time() - t0) * 1000, 1)
             self._livepath_status = 'reader_error:%s' % type(exc).__name__
             return ''
+
+    # 2026-11-19 第五笔：设备端 pidof（Chief 实测）——全量 logcat 12.7k 行/秒，
+    # 25s 会写 30 万行/30MB；按 IPTV PID 过滤可小两个数量级。pidof 必须在设备端跑
+    # （容器内无该进程）。取不到 PID ⇒ 回退不带 --pid（全量，靠收尾时限兜底）。
+    def _iptv_pid(self):
+        try:
+            from tvpilot import adb
+            out = adb.adb_shell_output('pidof %s' % IPTV_PKG, timeout=5) or ''
+            for tok in out.split():
+                if tok.isdigit():
+                    return tok
+        except Exception:
+            pass
+        return None
+
+    def _gather_livepath_text(self):
+        """第五笔统一取文本口：真流已起 ⇒ 收流读文件；否则退回注入 reader/快照 reader。
+
+        fake reader 离线测试期没有真流（_start_livepath_stream 返回 False、_livepath_stream
+        为 None），走 livepath_reader ⇒ D6/D7 的「zap 一次 + read_frame 再抓一次」语义不变。
+        """
+        if self._livepath_stream is not None:
+            self._stream_was_used = True
+            return self._collect_livepath_stream()
+        reader = self.livepath_reader or self._read_livepath_logcat
+        return reader() or ''
+
+    def _start_livepath_stream(self):
+        """第五笔：logcat -c 之后、tool_zap 之前起独立 logcat 流。
+
+        * 独立 ``subprocess.Popen(['adb','-s',<serial>,'logcat','-b','all','-v','threadtime',
+          '--pid=<pid>'])``，⛔ 不塞 `_run_shell_persistent`（持久 shell 会串行阻塞守卫的
+          dumpsys 及其余 adb 命令）。
+        * stdout 重定向到容器内临时文件，收完再整文件读回解析（⛔ 不边读边解析）。
+        * 注入式 livepath_reader 存在时**不起流**（离线测试/假 reader 用原语义：收流阶段
+          调 fake reader），保证既有 D1-D16 断言不破。
+        返回 True 表示真流已起；False 表示未起（fake reader 或起流失败）。
+        """
+        if self.livepath_reader is not None:
+            return False
+        import subprocess
+        import tempfile
+        from tvpilot import adb
+        path = None
+        fh = None
+        try:
+            tmp = tempfile.NamedTemporaryFile(prefix='tvpilot_livepath_', suffix='.log',
+                                              delete=False)
+            path = tmp.name
+            tmp.close()
+            argv = list(adb.ADB) + list(self.STREAM_CMD_TAIL)
+            # 链主改判：默认全量流（不过滤），PID 过滤仅 env 开启时启用、代码保留备用。
+            pid = self._iptv_pid() if LIVEPATH_PID_FILTER else None
+            if LIVEPATH_PID_FILTER and pid:
+                argv.append('--pid=%s' % pid)
+            fh = open(path, 'wb')
+            proc = subprocess.Popen(argv, stdout=fh, stderr=subprocess.STDOUT)
+            self._livepath_stream = {'proc': proc, 'fh': fh, 'path': path,
+                                     't0': time.time(), 'pid': pid}
+            self._livepath_pid = pid
+            return True
+        except Exception:
+            # 起流失败 ⇒ 清理句柄/临时文件，收流退回默认快照 reader（fail-closed 由解析保证）
+            if fh is not None:
+                try:
+                    fh.close()
+                except Exception:
+                    pass
+            if path is not None:
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+            self._livepath_stream = None
+            return False
+
+    def _abort_livepath_stream(self):
+        """第五笔：无条件收掉在途真实流（zap 失败/重入时调用），⛔ 不留残留占 adb 通道。"""
+        s = self._livepath_stream
+        if s is None:
+            return
+        self._livepath_stream = None
+        try:
+            s['proc'].terminate()
+            try:
+                s['proc'].wait(timeout=self.STREAM_STOP_WAIT_S)
+            except Exception:
+                s['proc'].kill()
+                s['proc'].wait(timeout=1)
+        except Exception:
+            pass
+        try:
+            s['fh'].close()
+        except Exception:
+            pass
+        try:
+            os.remove(s['path'])
+        except Exception:
+            pass
+
+    def _collect_livepath_stream(self):
+        """第五笔：zap 返回后收流——动态窗口等待 → 可靠 terminate/kill → 读文件解析。
+
+        动态窗口 = max(25s, 起流至今耗时 + 10s)，保证守卫满 20s 时收尾仍有 ≥10s。
+        fail-closed 不变：读回文本无 URL ⇒ resolve 返回 livepath_absent。
+        返回 logcat 文本（含 URL 行则 resolve_channel_from_livepath 能解 cid）。
+        """
+        s = self._livepath_stream
+        if s is None:
+            return ''
+        self._livepath_stream = None
+        proc, fh, path, t0 = s['proc'], s['fh'], s['path'], s['t0']
+        try:
+            elapsed = time.time() - t0
+            # 动态窗口 max(25, elapsed+10)，但封顶 60s——zap 异常拖长时也不顶破 240s 预算
+            window = min(max(self.STREAM_TOTAL_WINDOW_S, elapsed + self.STREAM_TAIL_MIN_S),
+                         self.STREAM_WINDOW_CAP_S)
+            remain = max(0.0, window - elapsed)
+            time.sleep(remain)
+        finally:
+            # 可靠收尾：terminate→wait→kill，绝不留下占 adb 通道的 logcat 进程
+            try:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=self.STREAM_STOP_WAIT_S)
+                except Exception:
+                    proc.kill()
+                    proc.wait(timeout=1)
+            except Exception:
+                pass
+            try:
+                fh.flush()
+                fh.close()
+            except Exception:
+                pass
+        try:
+            with open(path, 'rb') as f:
+                raw = f.read()
+            self._stream_bytes = len(raw)
+            self._stream_lines = raw.count(b'\n')
+            out = raw.decode('utf-8', errors='replace')
+        except Exception:
+            out = ''
+            self._stream_bytes = 0
+            self._stream_lines = 0
+        finally:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        self._livepath_ms = round((time.time() - t0) * 1000, 1)
+        return out
 
     # 1. 唤醒：只校验已在线/亮屏，⛔ 不做电源唤醒
     def wake(self):
@@ -153,6 +329,9 @@ class ADBRunner:
     def zap(self, channel_no):
         import subprocess
         from tvpilot import tools, iptv
+        # 第五笔重入保护：上一次若异常中断留有在途真实流，先无条件收掉，⛔ 不让残留
+        # logcat 进程占 adb 通道（Chief 硬要求）。
+        self._abort_livepath_stream()
         # 2026-11-19 第四笔（Chief 建议）：注入前清 logcat 缓冲，保证随后的
         # livePath 抓取窗口必含本次换台行（URL 行流动、几分钟就被冲掉）。
         # 清缓冲是只读运维动作、不改变电视状态；失败也不阻断换台。
@@ -161,7 +340,16 @@ class ADBRunner:
             adb.adb_cmd(self.LIVEPATH_CLEAR_CMD)
         except Exception:
             pass
-        data, err, msg = tools.tool_zap(str(channel_no))
+        # 第五笔：logcat -c 之后、注入之前起独立 logcat 流（覆盖守卫等待期+注入）。
+        # 真流在 _collect_livepath_stream 里收；fake reader 模式本调用返回 False、不走流。
+        self._start_livepath_stream()
+        # Chief 复核补：tool_zap 若抛异常，真流已成孤儿（L343 无 try → _abort 不执行，
+        # logcat 进程+临时文件留到下次 zap/重启）。异常路径先无条件收流再原样上抛。
+        try:
+            data, err, msg = tools.tool_zap(str(channel_no))
+        except Exception:
+            self._abort_livepath_stream()
+            raise
         ok = (err is None and msg is None)
         self.last_evidence['zap'] = {
             'channel_no': channel_no, 'ok': ok, 'err': err,
@@ -179,10 +367,14 @@ class ADBRunner:
             # 2026-11-19：reader 前重置代价/状态（注入式 fake reader 可能不写它们）
             self._livepath_ms = 0.0
             self._livepath_status = ''
+            self._stream_bytes = 0
+            self._stream_lines = 0
+            self._parse_ms = 0.0
             try:
-                reader = self.livepath_reader or self._read_livepath_logcat
-                txt = reader() or ''
+                txt = self._gather_livepath_text()
+                _t_parse = time.time()
                 _no, _r, cid = iptv.resolve_channel_from_livepath(txt)
+                self._parse_ms = round((time.time() - _t_parse) * 1000, 1)
             except subprocess.TimeoutExpired:
                 self._livepath_status = 'reader_timeout'
                 cid = None
@@ -200,6 +392,18 @@ class ADBRunner:
             if not txt:
                 self.last_evidence['zap']['livepath_reader_status'] = (
                     self._livepath_status or 'reader_empty(no_match)')
+            # 第五笔留证：抓取载体/动态窗口/PID——成对报数时一并贴，便于复盘
+            self.last_evidence['zap']['livepath_reader_kind'] = (
+                'stream' if self._stream_was_used else 'snapshot')
+            self.last_evidence['zap']['livepath_pid'] = getattr(self, '_livepath_pid', None)
+            self.last_evidence['zap']['livepath_pid_filter'] = LIVEPATH_PID_FILTER
+            # 链主改判：全量流首轮的体量/解析耗时三数——证明确没拖慢才决定要不要切 --pid
+            self.last_evidence['zap']['stream_bytes'] = self._stream_bytes
+            self.last_evidence['zap']['stream_lines'] = self._stream_lines
+            self.last_evidence['zap']['parse_ms'] = self._parse_ms
+        else:
+            # zap 失败：流已起但未收 ⇒ 无条件收掉，⛔ 不留残留占 adb 通道
+            self._abort_livepath_stream()
         return ok
 
     # 5. 单次调用内连续采集 S3/S4/S7 + 播放旁证（同帧近似，共用 checked_at）
@@ -225,9 +429,8 @@ class ADBRunner:
             # 没有才现抓兜底（如 ADB-off 腿未换台的情形）。
             logcat_text = self._livepath_text
             if not logcat_text:
-                reader = self.livepath_reader or self._read_livepath_logcat
                 try:
-                    logcat_text = reader() or ''
+                    logcat_text = self._gather_livepath_text() or ''
                 except Exception:
                     logcat_text = ''
             s4_no, s4_reason, cid = iptv.resolve_channel_from_livepath(logcat_text)
@@ -246,6 +449,13 @@ class ADBRunner:
                 'witness_kind': ('screen_evidence' if self.screen_evidence is not None
                                  else 'play_state'),
                 'checked_at': checked,
+                # 第五笔 ③ 成对报数：cid→台号 与物理现场（LastchannelID/play_state/前台）
+                # 同帧同 key 一次贴出，⛔ 不再只报一半（上次据此无法定性只写首位 vs 陈旧行）。
+                'paired_report': {
+                    'cid': cid, 'cid_to_no': s4_no, 's4_reason': s4_reason,
+                    'lastchannel_id': last_id, 'play_state_playing': playing,
+                    'foreground_app': fg,
+                },
             }
             # 我正在播 + 可信台号两者都要；缺一即 reason 非空 → 拒绝冒充 iptv_ok
             if not playing:

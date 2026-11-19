@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """TVPilot — 电视设备控制服务（v0.3 场景组合动作 + 联调支撑）
 
 定位：LLM Agent 的"手"，把 ADB/截图/换台等能力封装成标准化工具接口。
@@ -18,11 +18,11 @@ HTTP API（统一 /api/ 前缀，标准化响应 {ok,tool,result,cost_ms,error}�
   POST /api/input_text   {"text":"你好"}           输入文字（支持中文，tvremoteime广播）
   POST /api/launch_app   {"package":"com.xxx"}     启动 App
   POST /api/wait         {"seconds":2}              等待
-  POST /api/zap          {"channel":"湖南卫视"}     mytv 换台
+  POST /api/zap          {"channel":"湖南卫视"}     IPTV 数字键换台
   POST /api/combo/go_home                          回桌面（组合动作）
   POST /api/combo/trim_search_play {"keyword":"流浪地球"}  飞牛TV搜索播放（组合动作，支持中文）
-  GET  /api/current                                mytv 当前频道（代理）
-  GET  /api/channels                               mytv 频道列表（代理）
+  GET  /api/current                                IPTV 当前频道（机顶盒 SharedPreferences）
+  GET  /api/channels                               频道列表（channels.json 权威口径）
   GET  /api/health                                 服务健康检查
   GET  /api/history?limit=N&request_id=xxx        操作存档查询
 
@@ -87,7 +87,7 @@ from tvpilot.channels import (
     CH_FILE, CHANNEL_NUMBERS_FILE, NAMES,
     _load_names, _reload_channel_numbers,
     channel_no_of, channel_name_of_no, channel_numbers_map,
-    normalize_channel, _ALIAS, _CN_NUM,
+    normalize_channel, _ALIAS, _CN_NUM, ensure_channel_map_ready,
 )
 from tvpilot.screenshot import (
     HAS_PIL, screencap_raw, compress_image,
@@ -245,9 +245,9 @@ def heal_loop():
             check_tv_alert()
             check_health_alert()
 
-            # ===== mytv 保活巡检：已禁用 =====
-            # mytv 不需要后台保活，仅在语音换台/管家调用时通过 tool_zap -> ensure_mytv_foreground 唤起
-            # 之前的保活逻辑会导致用户用其他应用时 mytv 被误拉到前台
+            # ===== IPTV 前台保障：保活巡检已禁用 =====
+            # IPTV 不需要后台保活，仅在语音换台/管家调用时由 tool_zap 的两级守卫处理
+            # 旧 mytv 保活逻辑会把退役空壳误拉到前台，已移除（§10.17）
 
             # ===== TV 打断链路巡检 =====
             st = _http_json(ARC_BASE + '/api/xiaoai/keywords')
@@ -462,7 +462,12 @@ class TVPilotHandler(BaseHTTPRequestHandler):
 
 # ========== 主入口 ==========
 if __name__ == '__main__':
+    # ⑬ 启动自检（第五笔）：外挂 data 卷缺台号表则从镜像 seed 自愈拷入，channel_id→台号
+    # 映射为空（MAP_SIZE=0）⇒ 启动即报错退出，⛔ 不再静默 fail-open 起一个解不出台号的服务。
+    _map_ok, _map_detail = ensure_channel_map_ready()
+    if not _map_ok:
+        raise SystemExit('[启动中止] channel_id→台号 映射为空(MAP_SIZE=0)：%s' % _map_detail)
     threading.Thread(target=mqtt_loop, daemon=True).start()
     threading.Thread(target=heal_loop, daemon=True).start()
-    print(f'TVPilot v{TVPILOT_VERSION} 启动: http://0.0.0.0:{PORT}  (频道数 {len(NAMES)}, Pillow={HAS_PIL}, ops_log={OPS_LOG}, wake_local={WAKE_LOCAL}, docker_sock={os.path.exists(DOCKER_SOCK)})', flush=True)
+    print(f'TVPilot v{TVPILOT_VERSION} 启动: http://0.0.0.0:{PORT}  (频道数 {len(NAMES)}, Pillow={HAS_PIL}, ops_log={OPS_LOG}, wake_local={WAKE_LOCAL}, docker_sock={os.path.exists(DOCKER_SOCK)}, map_size={_map_detail["map_size"]})', flush=True)
     ThreadingHTTPServer(('0.0.0.0', PORT), TVPilotHandler).serve_forever()

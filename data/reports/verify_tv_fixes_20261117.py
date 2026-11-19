@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import types
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -255,6 +256,130 @@ ck('D16 reader 按异常类型分不按ms阈值',
    and 'reader_empty(no_match)' in _rsrc_now
    and '_livepath_status' in _rsrc_now)
 
+# ---- G 第五笔：流式 reader + gap 1.0 + ⑬ 部署自检 ----
+# 常量（类属性，AST 取，避开 docstring 自指）
+_stream_consts = {}
+for cl in _rtree.body:
+    if isinstance(cl, ast.ClassDef) and cl.name == 'ADBRunner':
+        for sub in cl.body:
+            if isinstance(sub, ast.Assign):
+                for t in sub.targets:
+                    if not isinstance(t, ast.Name):
+                        continue
+                    _v = sub.value
+                    if isinstance(_v, ast.Constant):
+                        _stream_consts[t.id] = _v.value
+                    elif isinstance(_v, ast.Tuple):
+                        _stream_consts[t.id] = tuple(
+                            e.value for e in _v.elts if isinstance(e, ast.Constant))
+ck('G1 流式总窗口=25s', _stream_consts.get('STREAM_TOTAL_WINDOW_S') == 25,
+   _stream_consts.get('STREAM_TOTAL_WINDOW_S'))
+ck('G2 收尾下限=10s(动态窗口)', _stream_consts.get('STREAM_TAIL_MIN_S') == 10,
+   _stream_consts.get('STREAM_TAIL_MIN_S'))
+ck('G3 流式命令尾部-b all -v threadtime',
+   _stream_consts.get('STREAM_CMD_TAIL') == ('logcat', '-b', 'all', '-v', 'threadtime'),
+   _stream_consts.get('STREAM_CMD_TAIL'))
+# gap=1.0（C10 只查 >=0.5，这里收紧到规格值）
+ck('G4 位间间隔gap=1.0s(⑭)', zg_val == 1.0, zg_val)
+# 起流方法：Popen 独立进程 + --pid 过滤 + 重定向临时文件，且⛔不塞持久 shell
+_g_cls = [n for n in _rtree.body if isinstance(n, ast.ClassDef) and n.name == 'ADBRunner'][0]
+_zap_fn = [n for n in _g_cls.body if isinstance(n, ast.FunctionDef) and n.name == 'zap'][0]
+_start_fn = [n for n in _g_cls.body if isinstance(n, ast.FunctionDef)
+             and n.name == '_start_livepath_stream'][0]
+_start_src = ast.get_source_segment(_rsrc, _start_fn) or ''
+# 只扫可执行体，排除 docstring（docstring 里写禁用名做说明会自指假红，矩阵规范 §3）
+_start_real = [n for n in _start_fn.body if not (isinstance(n, ast.Expr)
+               and isinstance(getattr(n, 'value', None), ast.Constant)
+               and isinstance(n.value.value, str))]
+_start_exec = ' '.join(ast.get_source_segment(_rsrc, n) or '' for n in _start_real)
+ck('G5 起流用独立subprocess.Popen', 'subprocess.Popen(' in _start_exec)
+ck('G6 PID过滤代码保留(备env开关)', '--pid=' in _start_exec and '_iptv_pid(' in _start_exec)
+# 链主改判：默认全量流、PID 过滤留作 env 开关（默认 0＝不过滤）
+_runner_mod = sys.modules.get('tvpilot.af_morning_news_runner')
+ck('G6b PID过滤默认关(LIVEPATH_PID_FILTER=0)',
+   hasattr(_runner_mod, 'LIVEPATH_PID_FILTER') and _runner_mod.LIVEPATH_PID_FILTER is False,
+   getattr(_runner_mod, 'LIVEPATH_PID_FILTER', 'MISSING'))
+ck('G6c env开关名TVPILOT_LIVEPATH_PID_FILTER',
+   'TVPILOT_LIVEPATH_PID_FILTER' in _rsrc)
+ck('G7 起流输出重定向临时文件', 'stdout=fh' in _start_exec and 'NamedTemporaryFile' in _start_exec)
+ck('G8 起流不走持久shell队列', '_run_shell_persistent' not in _start_exec)
+# 收流方法：动态窗口 + terminate→kill + 读文件后解析 + 清临时文件
+_collect_fn = [n for n in _g_cls.body if isinstance(n, ast.FunctionDef)
+               and n.name == '_collect_livepath_stream'][0]
+_collect_src = ast.get_source_segment(_rsrc, _collect_fn) or ''
+ck('G9 收流动态窗口max(TOTAL,elapsed+TAIL_MIN)',
+   'STREAM_TOTAL_WINDOW_S' in _collect_src and 'STREAM_TAIL_MIN_S' in _collect_src
+   and 'max(' in _collect_src)
+ck('G10 收流terminate→wait→kill(可靠收尾)',
+   '.terminate()' in _collect_src and '.wait(' in _collect_src and '.kill()' in _collect_src)
+ck('G11 收完再读文件(不边读边解析)',
+   _collect_src.find('proc.wait(') < _collect_src.find('with open(path') < _collect_src.find('return out'))
+ck('G12 收流后删临时文件', 'os.remove(path)' in _collect_src)
+# Chief 复核补①：zap 的 tool_zap 抛异常时须 abort 流再上抛（AST：Try handler 含 _abort 调用）
+_zap_try_ok = False
+for _n in ast.walk(_zap_fn):
+    if isinstance(_n, ast.Try):
+        _body_src = ' '.join(ast.get_source_segment(_rsrc, b) or '' for b in _n.body)
+        _handler_src = ' '.join(ast.get_source_segment(_rsrc, h) or '' for h in _n.handlers)
+        if 'tool_zap' in _body_src and '_abort_livepath_stream()' in _handler_src:
+            _zap_try_ok = True
+ck('G12b tool_zap异常⇒abort流再raise(无孤儿进程)', _zap_try_ok)
+# Chief 复核补②：动态窗口封顶 60s，不顶破 240s 预算
+ck('G12c 窗口上限STREAM_WINDOW_CAP_S=60', _stream_consts.get('STREAM_WINDOW_CAP_S') == 60,
+   _stream_consts.get('STREAM_WINDOW_CAP_S'))
+ck('G12d 收流窗口min(...,CAP)封顶',
+   'min(' in _collect_src and 'STREAM_WINDOW_CAP_S' in _collect_src)
+# 起收顺序：起流在 logcat -c 之后、tool_zap 之前；收流在 zap 返回后
+_zap_src = ast.get_source_segment(_rsrc, _zap_fn) or ''
+_p_clear = _zap_src.find('LIVEPATH_CLEAR_CMD')
+_p_start = _zap_src.find('_start_livepath_stream()')
+_p_zap = _zap_src.find('tools.tool_zap(')
+_p_gather = _zap_src.find('_gather_livepath_text()')
+ck('G13 起流顺序:清缓冲<起流<注入<收流',
+   0 <= _p_clear < _p_start < _p_zap < _p_gather, (_p_clear, _p_start, _p_zap, _p_gather))
+# 行为：流里无 URL ⇒ absent（fail-closed 不变）——用假流喂文本走真收流分支
+_fake_stream = {'proc': types.SimpleNamespace(
+                    terminate=lambda: None,
+                    wait=lambda timeout=None: 0,
+                    kill=lambda: None),
+                'fh': types.SimpleNamespace(flush=lambda: None, close=lambda: None),
+                'path': '', 't0': time.time(), 'pid': '12345'}
+import tempfile as _tf
+_tmpf = _tf.NamedTemporaryFile(mode='w', suffix='.log', delete=False, encoding='utf-8')
+_tmpf.write('11-19 logcat noise line, no rtsp url here\n')
+_tmpf.close()
+_fake_stream['path'] = _tmpf.name
+r_stream = ADBRunner()
+# 假流走真收流分支：实例常量置 0，跳过动态窗口 sleep（否则白等 25s）
+r_stream.STREAM_TOTAL_WINDOW_S = 0
+r_stream.STREAM_TAIL_MIN_S = 0
+r_stream._livepath_stream = _fake_stream
+_stream_txt = r_stream._gather_livepath_text()
+_stream_no, _stream_reason, _stream_cid = iptv.resolve_channel_from_livepath(_stream_txt)
+ck('G14 流里无URL⇒livepath_absent(fail-closed)',
+   (_stream_no, _stream_reason, _stream_cid) == (None, 'livepath_absent', None),
+   (_stream_no, _stream_reason, _stream_cid))
+ck('G15 收流后临时文件已清理(无残留)', not os.path.exists(_tmpf.name))
+# 成对报数 evidence 含 paired_report（cid→台号 + 物理现场同帧）
+ck('G16 paired_report同帧含cid/台号/物理现场', all(
+   k in r_ok.last_evidence['read_frame'].get('paired_report', {})
+   for k in ('cid', 'cid_to_no', 'lastchannel_id', 'play_state_playing', 'foreground_app')))
+# 链主改判：全量流体量/解析三数记进 zap evidence
+ck('G16b 三数stream_bytes/stream_lines/parse_ms进evidence', all(
+   k in r_retry.last_evidence['zap'] for k in ('stream_bytes', 'stream_lines', 'parse_ms')),
+   {k: r_retry.last_evidence['zap'].get(k) for k in ('stream_bytes', 'stream_lines', 'parse_ms')})
+ck('G16c pid_filter默认False进evidence',
+   r_retry.last_evidence['zap'].get('livepath_pid_filter') is False)
+# ⑬ 部署自检：seed 在卷外 + ensure_channel_map_ready + MAP_SIZE=0 报错
+_dockerfile = open(os.path.join(_ROOT, 'Dockerfile'), encoding='utf-8').read()
+_chansrc = open(os.path.join(_PKG, 'channels.py'), encoding='utf-8').read()
+_srvsrc = open(os.path.join(_ROOT, 'tvpilot_server.py'), encoding='utf-8').read()
+ck('G17 Dockerfile seed在data卷外(/app/data_seed)', 'COPY data/channel_numbers.json /app/data_seed/' in _dockerfile)
+ck('G18 channels提供ensure_channel_map_ready+MAP_SIZE', all(
+   k in _chansrc for k in ('def ensure_channel_map_ready', 'map_size', 'CHANNEL_NUMBERS_SEED')))
+ck('G19 server启动调自检且MAP_SIZE=0报错', all(
+   k in _srvsrc for k in ('ensure_channel_map_ready()', 'MAP_SIZE=0', 'raise SystemExit')))
+
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))
 ck('E2 真值 URL 未进 evidence（零打印）',
@@ -276,7 +401,10 @@ _result = {
     'checks_total': len(CHECKS), 'checks_pass': sum(1 for c in CHECKS if c['pass']),
     'checks_failed': [c['name'] for c in CHECKS if not c['pass']], 'exit_code': 0,
     'new_branches': ['判据换全屏几何', '硬deadline', 'livePath channel_id反解台号',
-                     '可信S4/fail-closed', '认证串零回传'],
+                     '可信S4/fail-closed', '认证串零回传',
+                     '流式reader(全量优先/--pid env开关备用/动态窗口/可靠kill)',
+                     'gap=1.0', '成对报数', '全量流体量三数',
+                     '⑬部署seed/MAP_SIZE自检', '孤儿流abort/窗口60s封顶'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:

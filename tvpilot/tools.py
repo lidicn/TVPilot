@@ -643,7 +643,8 @@ def iptv_fullscreen_playing():
 
 
 # 2026-11-18：多位数注入节奏（本机实测 0.15s 间隔只写首位：22→2、21→1）
-ZAP_DIGIT_GAP_S = float(os.environ.get('TVPILOT_ZAP_DIGIT_GAP', '0.6'))
+# 2026-11-19 第五笔/⑭：0.6s 同机一次对一次错（21 写成 2）⇒ 默认提到 1.0s。
+ZAP_DIGIT_GAP_S = float(os.environ.get('TVPILOT_ZAP_DIGIT_GAP', '1.0'))
 ZAP_ENTER_GAP_S = float(os.environ.get('TVPILOT_ZAP_ENTER_GAP', '0.6'))
 
 
@@ -653,8 +654,9 @@ def zap_via_adb_digits(channel_no):
     每个数字一条独立 `adb_cmd`（⛔ 不用 `&&` 链、⛔ 不用单次多参——11-13 B7/B9
     已证这两种写法在本机丢键/不下发）。2026-11-18 真机复现旧节奏 `sleep(0.15)`
     导致多位数只写首位（22→2、21→1）：本机 IPTV 数字输入窗口消化慢，间隔太短
-    后续键被吞。改为每位间隔 `ZAP_DIGIT_GAP_S`（默认 0.6s、env 可调）、末位到
-    ENTER 留 `ZAP_ENTER_GAP_S`（默认 0.6s），保证每位都进输入窗口。
+    后续键被吞。改为每位间隔 `ZAP_DIGIT_GAP_S`（默认 1.0s、env 可调；11-19 从
+    0.6s 提高——0.6s 同机一次对一次错）、末位到 ENTER 留 `ZAP_ENTER_GAP_S`
+    （默认 0.6s），保证每位都进输入窗口。
     注入时机由 `tool_zap` 的播放页守卫保证。
     """
     digits = str(channel_no)

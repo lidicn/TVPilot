@@ -7,6 +7,9 @@ COPY hdmi3_monitor.py /app/hdmi3_monitor.py
 COPY stats.py /app/stats.py
 COPY alerts.py /app/alerts.py
 COPY channels.json /app/channels.json
+# ⑬ 台号映射 seed：外挂 /app/data 卷会遮蔽镜像内同路径文件，故 seed 放卷外，
+# 由启动自检拷进 /app/data（缺表时自愈）；MAP_SIZE=0 则启动即报错。
+COPY data/channel_numbers.json /app/data_seed/channel_numbers.json
 # 模块化包
 COPY tvpilot/ /app/tvpilot/
 # PWA 静态资源
