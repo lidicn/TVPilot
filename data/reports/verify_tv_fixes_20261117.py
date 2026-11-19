@@ -380,6 +380,62 @@ ck('G18 channels提供ensure_channel_map_ready+MAP_SIZE', all(
 ck('G19 server启动调自检且MAP_SIZE=0报错', all(
    k in _srvsrc for k in ('ensure_channel_map_ready()', 'MAP_SIZE=0', 'raise SystemExit')))
 
+# ---- H 观测小改：七字段进 steps[].evidence（Chief 两条判据）----
+# 用带 last_evidence 的假 runner 驱动全链，验证键真落进正确 step、值非0、kind=stream，
+# 且六值/status 序列/话术一字未变。零真机。
+from tvpilot.af_morning_news import MorningNewsOrchestrator, Frame  # noqa: E402
+class _ObsRunner:
+    """驱动 iptv_ok 全链，同时携带 runner 侧采集读数。"""
+    def __init__(self):
+        self.last_evidence = {
+            'zap': {'channel_no': 21, 'stream_bytes': 240000, 'stream_lines': 3100,
+                    'parse_ms': 12.5, 'livepath_ms': 25010.0, 'livepath_cid': '3221226759',
+                    'livepath_reader_status': 'ok', 'livepath_reader_kind': 'stream',
+                    'livepath_pid_filter': False},
+            'read_frame': {'s4_reason': None,
+                           'paired_report': {'cid': '3221226759', 'cid_to_no': 21,
+                                             'lastchannel_id': '21',
+                                             'play_state_playing': True,
+                                             'foreground_app': 'com.android.smart.terminal.iptv'}},
+        }
+    def wake(self): return True
+    def probe_adb(self): return {'value': 'ok', 'quad': {}}
+    def launch_iptv(self): return True
+    def zap(self, no): return True
+    def read_frame(self):
+        return Frame(foreground_app='com.android.smart.terminal.iptv',
+                     current_channel='中央一台', same_frame=True, reason=None,
+                     checked_at=time.time())
+    def screen_on(self): return True
+    def sleep(self, s): pass
+
+_obs = _ObsRunner()
+_rec = MorningNewsOrchestrator(runner=_obs, publisher=lambda *a: None).run()
+_steps = {s['step']: s for s in _rec['steps']}
+_zap_ev = _steps.get('zap', {}).get('evidence', {})
+_vf_ev = _steps.get('verify_frame', {}).get('evidence', {})
+# 判据1：七字段键在正确 step + 值真（>0）
+_need_zap = ('stream_bytes', 'stream_lines', 'parse_ms', 'livepath_ms',
+             'livepath_cid', 'livepath_reader_status')
+ck('H1 zap evidence含六字段', all(k in _zap_ev for k in _need_zap),
+   [k for k in _need_zap if k not in _zap_ev])
+ck('H2 采集真收到内容(stream_bytes/lines>0)',
+   _zap_ev.get('stream_bytes', 0) > 0 and _zap_ev.get('stream_lines', 0) > 0)
+ck('H3 verify_frame evidence含s4_reason+paired_report',
+   's4_reason' in _vf_ev and 'paired_report' in _vf_ev)
+# 判据2：kind=stream（第五笔载体生死判据）
+ck('H4 livepath_reader_kind=stream(非snapshot)',
+   _zap_ev.get('livepath_reader_kind') == 'stream', _zap_ev.get('livepath_reader_kind'))
+# 约束：六值/status 序列/话术一字未变
+ck('H5 六值未变', _rec['result'] == 'iptv_ok' and _rec['stage'] == 'done'
+   and _rec['gap'] is None and _rec['detail'] is None
+   and _rec['af_speech'] == '新闻已打开' and _rec['screen_on_after'] is None)
+ck('H6 steps status序列未变',
+   [(s['step'], s['status']) for s in _rec['steps']] == [
+       ('wake', 'ok'), ('probe_adb', 'ok'), ('launch_iptv', 'ok'),
+       ('zap', 'ok'), ('verify_frame', 'ok')],
+   [(s['step'], s['status']) for s in _rec['steps']])
+
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))
 ck('E2 真值 URL 未进 evidence（零打印）',
@@ -404,7 +460,8 @@ _result = {
                      '可信S4/fail-closed', '认证串零回传',
                      '流式reader(全量优先/--pid env开关备用/动态窗口/可靠kill)',
                      'gap=1.0', '成对报数', '全量流体量三数',
-                     '⑬部署seed/MAP_SIZE自检', '孤儿流abort/窗口60s封顶'],
+                     '⑬部署seed/MAP_SIZE自检', '孤儿流abort/窗口60s封顶',
+                      '观测小改:七字段进steps.evidence+kind=stream'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:

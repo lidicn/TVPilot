@@ -308,7 +308,13 @@ class MorningNewsOrchestrator:
             self._step('zap', 'failed', {'channel_no': CCTV1_NO})
             return self._finish(self._terminal(
                 IPTV_FAIL, detail='zap_failed', frame_reason='capture_failed'), t0)
-        self._step('zap', 'ok', {'channel_no': CCTV1_NO})
+        # 观测小改（2026-11-19）：把 runner 采集的流式读数摊进 step evidence，只加键，
+        # ⛔ 不改六值/status 序列/话术。fake runner 无 last_evidence ⇒ 走空字典，离线矩阵不回退。
+        _zap_ev = dict(getattr(r, 'last_evidence', {}).get('zap', {}))
+        # 成功路径 reader 正常且已解出 cid ⇒ 状态真值为 ok（runner 仅在空串时写该键）
+        _zap_ev.setdefault('livepath_reader_status', 'ok')
+        _zap_ev['channel_no'] = CCTV1_NO
+        self._step('zap', 'ok', _zap_ev)
 
         # 5. S4 慢一拍：等 STB 写回并交叉确认，⛔ 拿换台后立刻读到的值当判据
         frame = self._settle_s4()
@@ -320,9 +326,12 @@ class MorningNewsOrchestrator:
             return self._finish(self._terminal(
                 IPTV_FAIL, detail='frame_verify_failed(%s)' % reason,
                 frame=frame, frame_reason=reason), t0)
-        self._step('verify_frame', 'ok', {
+        # 观测小改：把 read_frame 的 s4_reason/paired_report 等真值一并摊入（只加键）
+        _vf_ev = dict(getattr(r, 'last_evidence', {}).get('read_frame', {}))
+        _vf_ev.update({
             's3': frame.foreground_app, 's4': frame.current_channel,
             'same_frame': frame.same_frame, 'checked_at': frame.checked_at})
+        self._step('verify_frame', 'ok', _vf_ev)
 
         # 6. iptv_ok：S3/S4 同帧已验证；S7 如实 unknown(not_applicable_iptv_native)
         self._publisher('tvpilot_tv/tvdesk_login_state/state', s7_state(self._clock()))
