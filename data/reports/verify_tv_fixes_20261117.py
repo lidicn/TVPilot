@@ -215,22 +215,22 @@ ck('D6 zap解不出cid则不认缓存(缓存留空)', r_retry._livepath_text == 
 ck('D7 无URL行时read_frame现抓(reader调用2次)', _cnt.n == 2, _cnt.n)
 ck('D8 兜底抓到URL行⇒s4可信21', r_retry.last_evidence['read_frame'].get('s4_trusted_no') == 21)
 ck('D9 livepath_cid写入zap evidence', r_retry.last_evidence['zap'].get('livepath_cid') in (None, '3221226759'))
-# ⑧ launch 前台短路：已在前台⇒不调 monkey 且 ok=already；不在前台⇒仍走 monkey
+# ⑧/⑱ launch 前台短路：已在前台⇒不调 am start 且 ok=already；不在前台⇒前台断言(行为见 J5/J7)
 _monk = {'n': 0}
-_fake_tools.tool_launch_app = lambda pkg: (_monk.__setitem__('n', _monk['n'] + 1) or
-                                           ({'launched': True, 'method': 'adb'}, None, None))
 r_already = ADBRunner()
 _fg_orig = _stub.get_foreground_pkg
 _stub.get_foreground_pkg = lambda force_refresh=False: 'com.android.smart.terminal.iptv'
+r_already._launch_pid = lambda: '6174'   # 离线打桩，避免碰真 adb
+r_already._launch_start = lambda: (_monk.__setitem__('n', _monk['n'] + 1) or (True, 'note'))
 ok_already = r_already.launch_iptv()
 ck('D10 已在前台⇒ok且method=already', ok_already is True and
    r_already.last_evidence['launch_iptv'].get('method') == 'already')
-ck('D11 已在前台⇒不调monkey', _monk['n'] == 0, _monk['n'])
-# 不在前台⇒走 monkey
-_stub.get_foreground_pkg = lambda force_refresh=False: 'com.mitv.tvhome'
-r_cold = ADBRunner()
-ok_cold = r_cold.launch_iptv()
-ck('D12 不在前台⇒仍走monkey(调用1次)', ok_cold is True and _monk['n'] == 1, _monk['n'])
+ck('D11 已在前台⇒不调am start', _monk['n'] == 0, _monk['n'])
+# 不在前台⇒新语义：轮询断言前台，⛔ 拿 launched/start_ok 算过（行为覆盖见 J5/J7）
+_rsrc_launch = open(os.path.join(_PKG, 'af_morning_news_runner.py'), encoding='utf-8').read()
+ck('D12 不在前台⇒不拿launched算过(靠前台断言)',
+   "method': 'am_start_asserted'" in _rsrc_launch
+   and 'tool_launch_app' not in _rsrc_launch.split('def launch_iptv')[1].split('# 4.')[0])
 _stub.get_foreground_pkg = _fg_orig  # 恢复
 # 第四笔 evidence 三数
 ck('D13 reader代价ms/lines/chars在evidence', all(k in r_retry.last_evidence['zap']
@@ -472,6 +472,20 @@ _off_rec, _off_calls = _run_wakefail(
 ck('I5 ping通+adb关⇒adb_off_tv_on(不遮wake_fail)',
    _off_rec['result'] == 'adb_off_tv_on' and 'probe_adb' in _off_calls,
    (_off_rec['result'], _off_calls))
+# I5b（链主 11-20 补）：真机形态——value=unknown + 成对读数 ⇒ 仍须落 adb_off_tv_on。
+# 防以后有人把 wake 失败分支的 or 改成只判 value，I5 理想四元照样绿、真机却静默退回 wake_fail。
+_offb_rec, _offb_calls = _run_wakefail(
+    {'value': 'unknown', 'network_reachable': True, 'adb_reachable': False,
+     'reason': 'etiology_undetermined', 'etiology_distinguishable': False})
+ck('I5b 真机形态unknown+成对读数⇒adb_off_tv_on(防只判value回退)',
+   _offb_rec['result'] == 'adb_off_tv_on' and 'probe_adb' in _offb_calls,
+   (_offb_rec['result'], _offb_calls))
+# I5c 反向：value=unknown + 网通 + adb通 ⇒ 不得误落 adb_off_tv_on
+_offc_rec, _ = _run_wakefail(
+    {'value': 'unknown', 'network_reachable': True, 'adb_reachable': True,
+     'reason': None, 'etiology_distinguishable': False})
+ck('I5c unknown+adb通⇒不落adb_off_tv_on',
+   _offc_rec['result'] != 'adb_off_tv_on', _offc_rec['result'])
 # 网断 ⇒ 维持 wake_fail，reason=network_unreachable 如实留在 probe step，未遮成 adb_off
 _net_rec, _ = _run_wakefail(
     {'value': 'unknown', 'network_reachable': False, 'adb_reachable': False,
@@ -513,6 +527,143 @@ ck('I8b adb通+ping不通⇒不降级(走到launch非adb_off)',
    _rec8['result'] != 'adb_off_tv_on' and 'launch_iptv' in _pp.calls,
    (_rec8['result'], _pp.calls))
 
+# ---- J ⑱ launch 前台断言（链主/Chief 崩溃取证）：am start + 前台断言 + crash_marker ----
+_rsrc_j = open(os.path.join(_PKG, 'af_morning_news_runner.py'), encoding='utf-8').read()
+ck('J1 主路径用am start -W -n(不用monkey)',
+   'am start -W -n %s' in _rsrc_j and 'IPTV_LAUNCH_ACTIVITY' in _rsrc_j
+   and 'monkey -p' not in _rsrc_j)
+ck('J2 LAUNCHER activity正确', 'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity' in _rsrc_j)
+ck('J3 evidence带crash_marker/logcat扫FATAL',
+   '_launch_crash_marker' in _rsrc_j and "'crash_marker'" in _rsrc_j
+   and 'app is in background' in _rsrc_j)
+ck('J4 轮询常量1s/30s/3次', all(k in _rsrc_j for k in
+   ('LAUNCH_POLL_S = 1.0', 'LAUNCH_WAIT_MAX_S = 30.0', 'LAUNCH_MAX_ATTEMPTS = 3')))
+
+class _LaunchRunner(ADBRunner):
+    """可注入 launch helper 的子类：前台序列按虚拟时钟推进，sleep 不真等。"""
+    def __init__(self, focus_seq, pid='6174', crash=False, start_ok=True):
+        super().__init__()
+        self.focus_seq = list(focus_seq)  # 每次读取弹出一个；用尽后返回最后一个
+        self._pid = pid
+        self._crash = crash
+        self._start_ok = start_ok
+        self.t = 0.0
+        self.starts = 0
+    def _launch_foreground(self):
+        v = self.focus_seq.pop(0) if len(self.focus_seq) > 1 else self.focus_seq[0]
+        return v
+    def _launch_pid(self): return self._pid
+    def _launch_crash_marker(self): return self._crash
+    def _launch_start(self):
+        self.starts += 1
+        return (True if self._start_ok else False), 'am_start_note', True
+    def sleep(self, s): self.t += s
+    def _now(self): return self.t
+# 让 launch_iptv 内部 time.time 走虚拟钟：打桩模块 time.time
+import tvpilot.af_morning_news_runner as _rn_mod
+_orig_time = _rn_mod.time.time
+# ① 前台一直别处(null) ⇒ 超时红，timed_out=true，attempts=3
+rj1 = _LaunchRunner([None], pid='6174', crash=False)
+_rn_mod.time.time = lambda: rj1.t
+_rn_mod.time.sleep = lambda s: None
+rj1.LAUNCH_WAIT_MAX_S = 3.0   # 缩短：3s 上限，1s 轮询
+ok1 = rj1.launch_iptv()
+ck('J5 前台一直不动⇒超时红(timed_out=true)', ok1 is False and
+   rj1.last_evidence['launch_iptv']['timed_out'] is True,
+   rj1.last_evidence['launch_iptv'])
+# ② 第2s才到前台 ⇒ ok，wait_ms≈2000
+rj2 = _LaunchRunner([None, None, 'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity'],
+                    pid='6174', crash=False)
+def _clock2(): return rj2.t
+_rn_mod.time.time = _clock2
+rj2.LAUNCH_WAIT_MAX_S = 10.0
+ok2 = rj2.launch_iptv()
+_wms = rj2.last_evidence['launch_iptv'].get('wait_ms', -1)
+ck('J6 延迟到前台⇒ok且wait_ms有值(非0非超时)', ok2 is True and 0 < _wms < 10000,
+   'ok=%s wait_ms=%s' % (ok2, _wms))
+# ③ launched/start_ok 为真但前台始终别的 app ⇒ 红（防假 ok 回归）
+rj3 = _LaunchRunner(['com.mitv.tvhome/.MainActivityUserMode'], pid='6174', crash=False)
+_rn_mod.time.time = lambda: rj3.t
+rj3.LAUNCH_WAIT_MAX_S = 3.0
+ok3 = rj3.launch_iptv()
+ck('J7 start成功但前台始终别处⇒红(防假ok)', ok3 is False and
+   rj3.last_evidence['launch_iptv']['ok'] is False, rj3.last_evidence['launch_iptv'])
+# ④ 静态核：每次启动前清 logcat 缓冲，且清在 am start 之前（链主方案①，Chief bug）
+_ls_body = _rsrc_j.split('def _launch_start(self):')[1].split('def _launch_crash_marker')[0]
+ck('J8 每次启动前logcat -c在am start之前(首崩不污染重试)',
+   "adb_shell_output('logcat -c'" in _ls_body and "adb_shell_output('am start -W -n" in _ls_body
+   and _ls_body.index("adb_shell_output('logcat -c'")
+       < _ls_body.index("adb_shell_output('am start -W -n"),
+   _ls_body[:220])
+# ⑤ 行为核：首崩次成⇒ok 且 attempts=2（锁死"崩了却三次瞬间烧完"的假红 bug）
+# :208/:209 已把 sys.modules 与包属性都换成假 tools；runner 内方法级
+# `from tvpilot import tools` 走包属性，patch 同一个对象即可保证零真机。
+_orig_home = getattr(_tvpkg.tools, 'tool_combo_go_home', None)
+_tvpkg.tools.tool_combo_go_home = lambda: None
+class _FlakyCrashRunner(_LaunchRunner):
+    """第1次尝试 crash=True 触发 HOME 重试；第2次前台到位 ⇒ ok、attempts=2。"""
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._crash_calls = 0
+    def _launch_crash_marker(self):
+        self._crash_calls += 1
+        return self._crash_calls == 1
+# 首元素是 launch_iptv():386 的 fg0 短路探测；其次才是第1轮内层（crash）与第2轮内层（前台到位）
+rj4 = _FlakyCrashRunner([None, None, 'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity'],
+                        pid='6174', crash=False)
+_rn_mod.time.time = lambda: rj4.t
+rj4.LAUNCH_WAIT_MAX_S = 10.0
+ok4 = rj4.launch_iptv()
+_ev4 = rj4.last_evidence['launch_iptv']
+ck('J9 首崩次成⇒ok且attempts=2(锁死重试被污染bug)',
+   ok4 is True and _ev4.get('ok') is True and _ev4.get('attempts') == 2,
+   _ev4)
+# ⑥ 真实 _launch_start：清缓冲异常⇒log_cleared=False 且不阻断；成功⇒True（来源非恒 True）
+import tvpilot.adb as _adb_mod
+_orig_sh = _adb_mod.adb_shell_output
+def _sh_clear_fail(cmd, timeout=10):
+    if cmd == 'logcat -c':
+        raise OSError('clear_failed_sim')
+    return 'Status: ok'
+_adb_mod.adb_shell_output = _sh_clear_fail
+_rc_fail = ADBRunner()._launch_start()
+_adb_mod.adb_shell_output = lambda cmd, timeout=10: ('' if cmd == 'logcat -c' else 'Status: ok')
+_rc_ok = ADBRunner()._launch_start()
+_adb_mod.adb_shell_output = lambda cmd, timeout=10: (
+    'logcat: permission denied' if cmd == 'logcat -c' else 'Status: ok')
+_rc_denied = ADBRunner()._launch_start()
+_adb_mod.adb_shell_output = _orig_sh
+ck('J10 清缓冲异常⇒log_cleared=False且不阻断(成功⇒True)',
+   _rc_fail[0] is True and _rc_fail[2] is False and _rc_ok[2] is True,
+   'fail=%s ok=%s' % (_rc_fail, _rc_ok))
+ck('J13 stdout含permission denied⇒log_cleared=False(非恒True)',
+   _rc_denied[0] is True and _rc_denied[2] is False, _rc_denied)
+# ⑦ evidence 成功/失败两条路径都透传 log_cleared=False
+class _ClearFalseRunner(_LaunchRunner):
+    def _launch_start(self):
+        self.starts += 1
+        return True, 'clear_failed_note', False   # 启动成功但清缓冲失败
+rj5 = _ClearFalseRunner([None, None, 'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity'],
+                        pid='6174', crash=False)
+_rn_mod.time.time = lambda: rj5.t
+rj5.LAUNCH_WAIT_MAX_S = 10.0
+ok5 = rj5.launch_iptv()
+_ev5 = rj5.last_evidence['launch_iptv']
+ck('J11 evidence成功路径带log_cleared=False且不阻断',
+   ok5 is True and _ev5.get('log_cleared') is False, _ev5)
+rj6 = _ClearFalseRunner([None], pid='6174', crash=False)
+_rn_mod.time.time = lambda: rj6.t
+rj6.LAUNCH_WAIT_MAX_S = 3.0
+ok6 = rj6.launch_iptv()
+_ev6 = rj6.last_evidence['launch_iptv']
+ck('J12 evidence失败路径带log_cleared=False',
+   ok6 is False and _ev6.get('log_cleared') is False, _ev6)
+if _orig_home is None:
+    delattr(_tvpkg.tools, 'tool_combo_go_home')
+else:
+    _tvpkg.tools.tool_combo_go_home = _orig_home
+_rn_mod.time.time = _orig_time   # 恢复
+
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))
 ck('E2 真值 URL 未进 evidence（零打印）',
@@ -540,7 +691,11 @@ _result = {
                      '⑬部署seed/MAP_SIZE自检', '孤儿流abort/窗口60s封顶',
                       '观测小改:七字段进steps.evidence+kind=stream',
                       'ADB-off修法:network_ping真网络探针+wake失败先probe+病因不遮',
-                      '正常路径ADB判据用adb_reachable(ping抖不误降级)'],
+                      '正常路径ADB判据用adb_reachable(ping抖不误降级)',
+                      '⑱launch前台断言:am start+crash_marker+防假ok',
+                       '⑱每次启动前logcat-c清缓冲+首崩次成attempts=2断言',
+                       '⑱log_cleared真实bool(异常/denied关键词⇒False,成功⇒True)+evidence双路径透传',
+                       'I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:

@@ -319,25 +319,142 @@ class ADBRunner:
         self.last_evidence['probe_adb'] = out
         return out
 
-    # 3. IPTV 全屏：复用 tool_launch_app（monkey 起 LAUNCHER）
-    def launch_iptv(self):
-        """⑧ 短路（2026-11-19）：语义是「确保 app 在前台」。若前台已是 IPTV_PKG，
-        直接 ok(method=already)、⛔ 不调 monkey——monkey 对已在前台的 app 不发
-        `Events injected: 1`，会假失败（playing 与否都短路，播不播是后续步骤的事）。"""
-        from tvpilot import state, tools
+    # 3. IPTV 全屏：am start -W -n 落前台 + 断言（⑱，链主定死 + Chief 崩溃取证）
+    # Chief 19:05 取证：monkey 在这台电视会把 IPTV 注到后台→tvhome 抢焦点→IPTVActivity
+    # 被 pause→onCreate 起 com.amt.authservice 触发 Android 9 后台服务 FATAL、进程死。
+    # 改用 am start -W -n（真等到前台）＋前台断言＋HOME→重试（上限3次）。
+    IPTV_LAUNCH_ACTIVITY = 'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity'
+    LAUNCH_POLL_S = 1.0
+    LAUNCH_WAIT_MAX_S = 30.0
+    LAUNCH_MAX_ATTEMPTS = 3
+
+    def _launch_foreground(self):
+        """读当前前台；可注入打桩（离线测试）。null/空 ⇒ 窗口未就绪，返回 None。"""
+        from tvpilot import state
         fg = state.get_foreground_pkg(force_refresh=True)
-        if fg and IPTV_PKG in fg:
+        return fg or None
+
+    def _launch_pid(self):
+        """读 IPTV 进程 pid 字符串；可注入打桩。无进程 ⇒ None。"""
+        from tvpilot import adb
+        try:
+            out = adb.adb_shell_output('pidof %s' % IPTV_PKG, timeout=5) or ''
+            for tok in out.split():
+                if tok.isdigit():
+                    return tok
+        except Exception:
+            pass
+        return None
+
+    def _launch_start(self):
+        """am start -W -n 真启动，返回 (ok, note, log_cleared)。可注入打桩。-W 等启动完成。
+        每次启动前先 logcat -c（链主方案①）：让 crash_marker 只反映本次尝试——
+        不清的话第1次的 FATAL 会一直躺在缓冲里，第2/3次内层第一圈就 crashed=True，
+        三次瞬间烧完 ⇒ 本该重试的崩溃场景反而假红。
+        log_cleared 如实回清缓冲结果：adb_shell_output 只回 stdout、无返回码，
+        设备侧报错（如 permission denied）会当 stdout 返回，故须两条件同时成立：
+        未抛异常 ∧ 输出非 None ∧ 输出（小写）不含
+        error|permission|denied|failed|invalid；否则 False。⛔ 没抛异常就算成功。"""
+        from tvpilot import adb
+        log_cleared = False
+        try:
+            _clr = adb.adb_shell_output('logcat -c', timeout=5)
+            log_cleared = (_clr is not None and
+                           not any(k in _clr.lower() for k in
+                                   ('error', 'permission', 'denied', 'failed', 'invalid')))
+        except Exception:
+            log_cleared = False
+        try:
+            out = adb.adb_shell_output('am start -W -n %s' % self.IPTV_LAUNCH_ACTIVITY,
+                                       timeout=15) or ''
+        except Exception as exc:
+            return False, 'start_error:%s' % type(exc).__name__, log_cleared
+        ok = 'Error' not in out
+        return ok, out.strip()[:200], log_cleared
+
+    def _launch_crash_marker(self):
+        """Chief 取证追加：启动窗口内 logcat 是否出现 FATAL/后台服务异常。
+        这条把「慢」和「崩」分开——今晚就是没它，把 FATAL 误读成「认证页初始化中」。
+        只读 logcat -d，命中即 True；凭据零打印（只回 bool）。可注入打桩。"""
+        from tvpilot import adb
+        try:
+            out = adb.adb_shell_output(
+                "logcat -b all -d -t 300 | grep -iE 'FATAL|app is in background|"
+                "Not allowed to start service'", timeout=10) or ''
+            return any(k in out for k in ('FATAL', 'app is in background',
+                                          'Not allowed to start service'))
+        except Exception:
+            return False
+
+    def launch_iptv(self):
+        """⑱：am start -W -n 后轮询断言前台=IPTV_PKG，⛔ 不看 launched、⛔ 用 monkey。
+
+        · 前台已是 IPTV_PKG ⇒ 短路 ok(already)（⑧ 保留）。
+        · 每轮 am start -W -n → 轮询 1s×30s 断言前台；焦点 null 但 pid 在 ⇒ 继续等（慢，
+          ⛔ 不当失败）；pid 消失或 logcat 命中 FATAL ⇒ HOME 后重试（上限3次）。
+        · 30s 仍不到 IPTV 前台 ⇒ 如实 ok=False，evidence 带 attempts/wait_ms/
+          final_focus/final_pid/timed_out=true/crash_marker。⛔ launched=True 算过；
+          ⛔ 拿 playing=false 当失败（播不播是 zap/守卫的事）。
+        """
+        from tvpilot import tools
+        t0 = time.time()
+        fg0 = self._launch_foreground()
+        if fg0 and IPTV_PKG in fg0:
             self.last_evidence['launch_iptv'] = {
-                'ok': True, 'method': 'already', 'foreground': fg,
+                'ok': True, 'method': 'already', 'foreground': fg0,
+                'attempts': 0, 'wait_ms': 0.0, 'final_focus': fg0,
+                'final_pid': self._launch_pid(), 'timed_out': False,
+                'crash_marker': False, 'log_cleared': None,  # already 未发起启动/清缓冲
             }
             return True
-        data, err, msg = tools.tool_launch_app(IPTV_PKG)
-        ok = (err is None and msg is None and bool((data or {}).get('launched')))
+
+        attempts = 0
+        final_focus, final_pid = fg0, self._launch_pid()
+        start_note = ''
+        log_cleared = None   # 未发起启动前无清缓冲结果
+        while attempts < self.LAUNCH_MAX_ATTEMPTS:
+            attempts += 1
+            _ok, start_note, log_cleared = self._launch_start()
+            # 轮询前台断言
+            while True:
+                final_focus = self._launch_foreground()
+                final_pid = self._launch_pid()
+                elapsed_ms = round((time.time() - t0) * 1000, 1)
+                if final_focus and IPTV_PKG in final_focus:
+                    self.last_evidence['launch_iptv'] = {
+                        'ok': True, 'method': 'am_start_asserted', 'foreground': final_focus,
+                        'attempts': attempts, 'wait_ms': elapsed_ms, 'final_focus': final_focus,
+                        'final_pid': final_pid, 'timed_out': False,
+                        'crash_marker': self._launch_crash_marker(), 'start_note': start_note,
+                        'log_cleared': log_cleared,
+                    }
+                    return True
+                if elapsed_ms >= self.LAUNCH_WAIT_MAX_S * 1000:
+                    self._launch_fail(attempts, elapsed_ms, final_focus, final_pid,
+                                      start_note, log_cleared)
+                    return False
+                # Chief：焦点 null 但 pid 在 ⇒ 继续等（慢，不误判）；pid 消失（崩了）
+                # 或 logcat 命中 FATAL ⇒ HOME 后重试。⛔ 把 null+pid在 当失败。
+                crashed = (final_pid is None) or self._launch_crash_marker()
+                if attempts < self.LAUNCH_MAX_ATTEMPTS and crashed:
+                    try:
+                        tools.tool_combo_go_home()
+                    except Exception:
+                        pass
+                    break
+                self.sleep(self.LAUNCH_POLL_S)
+        elapsed_ms = round((time.time() - t0) * 1000, 1)
+        self._launch_fail(attempts, elapsed_ms, final_focus, final_pid, start_note, log_cleared)
+        return False
+
+    def _launch_fail(self, attempts, elapsed_ms, focus, pid, note, log_cleared=None):
         self.last_evidence['launch_iptv'] = {
-            'ok': ok, 'err': err, 'foreground': (data or {}).get('foreground'),
-            'method': (data or {}).get('method'),
+            'ok': False, 'method': 'foreground_timeout', 'err': 'iptv_launch_failed',
+            'attempts': attempts, 'wait_ms': elapsed_ms, 'final_focus': focus,
+            'final_pid': pid, 'timed_out': True,
+            'crash_marker': self._launch_crash_marker(), 'start_note': note,
+            'log_cleared': log_cleared,
         }
-        return ok
 
     # 4. 换台：复用 tool_zap（逐位数字键注入 + 两级播放页守卫）
     def zap(self, channel_no):
