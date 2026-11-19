@@ -23,7 +23,7 @@
     "⑱launch前台断言:am start+crash_marker+防假ok",
     "⑱每次启动前logcat-c清缓冲+首崩次成attempts=2断言",
     "⑱log_cleared真实bool(异常/denied关键词⇒False,成功⇒True)+evidence双路径透传",
-    "I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向"
+    "⑲ I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向"
   ],
   "products_hash_stable": true
 }

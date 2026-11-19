@@ -472,19 +472,19 @@ _off_rec, _off_calls = _run_wakefail(
 ck('I5 ping通+adb关⇒adb_off_tv_on(不遮wake_fail)',
    _off_rec['result'] == 'adb_off_tv_on' and 'probe_adb' in _off_calls,
    (_off_rec['result'], _off_calls))
-# I5b（链主 11-20 补）：真机形态——value=unknown + 成对读数 ⇒ 仍须落 adb_off_tv_on。
+# ⑲ I5b（链主 11-20 补）：真机形态——value=unknown + 成对读数 ⇒ 仍须落 adb_off_tv_on。
 # 防以后有人把 wake 失败分支的 or 改成只判 value，I5 理想四元照样绿、真机却静默退回 wake_fail。
 _offb_rec, _offb_calls = _run_wakefail(
     {'value': 'unknown', 'network_reachable': True, 'adb_reachable': False,
      'reason': 'etiology_undetermined', 'etiology_distinguishable': False})
-ck('I5b 真机形态unknown+成对读数⇒adb_off_tv_on(防只判value回退)',
+ck('⑲ I5b 真机形态unknown+成对读数⇒adb_off_tv_on(防只判value回退)',
    _offb_rec['result'] == 'adb_off_tv_on' and 'probe_adb' in _offb_calls,
    (_offb_rec['result'], _offb_calls))
-# I5c 反向：value=unknown + 网通 + adb通 ⇒ 不得误落 adb_off_tv_on
+# ⑲ I5c 反向：value=unknown + 网通 + adb通 ⇒ 不得误落 adb_off_tv_on
 _offc_rec, _ = _run_wakefail(
     {'value': 'unknown', 'network_reachable': True, 'adb_reachable': True,
      'reason': None, 'etiology_distinguishable': False})
-ck('I5c unknown+adb通⇒不落adb_off_tv_on',
+ck('⑲ I5c unknown+adb通⇒不落adb_off_tv_on',
    _offc_rec['result'] != 'adb_off_tv_on', _offc_rec['result'])
 # 网断 ⇒ 维持 wake_fail，reason=network_unreachable 如实留在 probe step，未遮成 adb_off
 _net_rec, _ = _run_wakefail(
@@ -695,7 +695,7 @@ _result = {
                       '⑱launch前台断言:am start+crash_marker+防假ok',
                        '⑱每次启动前logcat-c清缓冲+首崩次成attempts=2断言',
                        '⑱log_cleared真实bool(异常/denied关键词⇒False,成功⇒True)+evidence双路径透传',
-                       'I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向'],
+                       '⑲ I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:
