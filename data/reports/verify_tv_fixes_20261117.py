@@ -436,6 +436,83 @@ ck('H6 steps status序列未变',
        ('zap', 'ok'), ('verify_frame', 'ok')],
    [(s['step'], s['status']) for s in _rec['steps']])
 
+# ---- I ADB-off 腿修法（链主 2026-11-19 四修）：真网络探针 + wake失败先probe ----
+# I1/I2：network_reachable 用 ICMP network_ping，不再用 tv_online
+_adb_src = open(os.path.join(_PKG, 'adb.py'), encoding='utf-8').read()
+_runner_src_i = open(os.path.join(_PKG, 'af_morning_news_runner.py'), encoding='utf-8').read()
+_mn_src_i = open(os.path.join(_PKG, 'af_morning_news.py'), encoding='utf-8').read()
+ck('I1 adb.py新增network_ping真网络探针', 'def network_ping(' in _adb_src
+   and 'ping' in _adb_src and 'subprocess.run' in _adb_src)
+ck('I2 probe_adb用network_ping不用tv_online判network_reachable',
+   'adb.network_ping()' in _runner_src_i
+   and "quad['network_reachable'] = net_ok" in _runner_src_i)
+ck('I3 probe_adb留adb_reachable与network_reachable分开', 'adb_reachable' in _runner_src_i)
+# I4：wake 失败分支先 probe，adb关但网通 ⇒ adb_off_tv_on（源码结构）
+ck('I4 wake失败分支先probe且判adb_off_tv_on',
+   _mn_src_i.find('if not r.wake():') < _mn_src_i.find('r.probe_adb()')
+   and "ADB_OFF_TV_ON, detail='adb_unavailable'" in _mn_src_i)
+# I5/I6：行为驱动——FakeRunner 先 wake=False，probe 返回不同四元
+class _ProbeRunner:
+    def __init__(self, probe): self.probe = probe; self.calls = []
+    def wake(self): self.calls.append('wake'); return False
+    def probe_adb(self): self.calls.append('probe_adb'); return self.probe
+    def launch_iptv(self): return False
+    def zap(self, n): return False
+    def read_frame(self): return None
+    def screen_on(self): return True
+    def sleep(self, s): pass
+def _run_wakefail(probe):
+    rr = _ProbeRunner(probe)
+    rec = MorningNewsOrchestrator(runner=rr, publisher=lambda *a: None).run()
+    return rec, rr.calls
+# ping通+adb不通 ⇒ adb_off_tv_on，且 probe 被调用
+_off_rec, _off_calls = _run_wakefail(
+    {'value': 'off', 'network_reachable': True, 'adb_reachable': False,
+     'reason': 'setting_off', 'etiology_distinguishable': True})
+ck('I5 ping通+adb关⇒adb_off_tv_on(不遮wake_fail)',
+   _off_rec['result'] == 'adb_off_tv_on' and 'probe_adb' in _off_calls,
+   (_off_rec['result'], _off_calls))
+# 网断 ⇒ 维持 wake_fail，reason=network_unreachable 如实留在 probe step，未遮成 adb_off
+_net_rec, _ = _run_wakefail(
+    {'value': 'unknown', 'network_reachable': False, 'adb_reachable': False,
+     'reason': 'network_unreachable', 'etiology_distinguishable': False})
+_net_probe_ev = next((s['evidence'] for s in _net_rec['steps'] if s['step'] == 'probe_adb'), {})
+ck('I6 网断⇒wake_fail且reason=network_unreachable未遮成adb_off',
+   _net_rec['result'] == 'wake_fail'
+   and _net_probe_ev.get('quad', {}).get('reason') == 'network_unreachable',
+   (_net_rec['result'], _net_probe_ev))
+# tv_off ⇒ reason=tv_off，与 network_unreachable 是两个不同值（⛔ 遮成同一个）
+_tv_rec, _ = _run_wakefail(
+    {'value': 'unknown', 'network_reachable': True, 'adb_reachable': False,
+     'reason': 'tv_off', 'etiology_distinguishable': False})
+_tv_probe_ev = next((s['evidence'] for s in _tv_rec['steps'] if s['step'] == 'probe_adb'), {})
+ck('I7 tv_off与network_unreachable是不同reason(不遮成同一个)',
+   _tv_probe_ev.get('quad', {}).get('reason') == 'tv_off'
+   and _tv_probe_ev.get('quad', {}).get('reason') != 'network_unreachable',
+   _tv_probe_ev.get('quad', {}).get('reason'))
+# I8（Chief 复核隐患）：正常路径 adb通+ping不通 ⇒ 不降级成 adb_off_tv_on，继续走 IPTV
+ck('I8 正常路径用adb_reachable不用ICMP判ADB',
+   "quad.get('adb_reachable') is False" in _mn_src_i
+   and "quad.get('network_reachable') is False" not in _mn_src_i.split('def _run_chain')[1].split('# 3. IPTV')[0])
+class _WakeOkPingDown:
+    """wake 成功、adb 通、但 ICMP ping 不通（防火墙丢包/镜像无NET_RAW）"""
+    def __init__(self): self.calls = []
+    def wake(self): self.calls.append('wake'); return True
+    def probe_adb(self):
+        self.calls.append('probe_adb')
+        return {'value': 'unknown', 'network_reachable': False, 'adb_reachable': True,
+                'reason': 'network_unreachable', 'etiology_distinguishable': False}
+    def launch_iptv(self): self.calls.append('launch_iptv'); return False  # 走到IPTV步即算没被降级
+    def zap(self, n): return False
+    def read_frame(self): return None
+    def screen_on(self): return True
+    def sleep(self, s): pass
+_pp = _WakeOkPingDown()
+_rec8 = MorningNewsOrchestrator(runner=_pp, publisher=lambda *a: None).run()
+ck('I8b adb通+ping不通⇒不降级(走到launch非adb_off)',
+   _rec8['result'] != 'adb_off_tv_on' and 'launch_iptv' in _pp.calls,
+   (_rec8['result'], _pp.calls))
+
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))
 ck('E2 真值 URL 未进 evidence（零打印）',
@@ -461,7 +538,9 @@ _result = {
                      '流式reader(全量优先/--pid env开关备用/动态窗口/可靠kill)',
                      'gap=1.0', '成对报数', '全量流体量三数',
                      '⑬部署seed/MAP_SIZE自检', '孤儿流abort/窗口60s封顶',
-                      '观测小改:七字段进steps.evidence+kind=stream'],
+                      '观测小改:七字段进steps.evidence+kind=stream',
+                      'ADB-off修法:network_ping真网络探针+wake失败先probe+病因不遮',
+                      '正常路径ADB判据用adb_reachable(ping抖不误降级)'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:

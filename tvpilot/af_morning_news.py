@@ -281,6 +281,18 @@ class MorningNewsOrchestrator:
         self._set_stage(STAGE_WAKING)
         if not r.wake():
             self._step('wake', 'failed', {'channels': 'miIO/WoL/outlet'})
+            # 2026-11-19 链主修法②③：wake 失败先探明是不是「ADB 关但网通」——
+            # 是则如实落 adb_off_tv_on（四元可区分病因），⛔ 遮成 wake_fail。
+            # wake 依赖 adb.tv_online()，电视把 ADB 开关关掉时必 false，原先在此直接
+            # 终态 wake_fail 导致 probe 永远到不了、adb_off_tv_on 结构上出不来。
+            _wp = r.probe_adb() or {}
+            self._step('probe_adb', 'ok', {'quad': _wp})
+            if (_wp.get('value') == 'off' or
+                    (_wp.get('adb_reachable') is False and _wp.get('network_reachable') is True)):
+                return self._finish(self._terminal(
+                    ADB_OFF_TV_ON, detail='adb_unavailable'), t0)
+            # 真·唤醒失败（网断/电视关机）⇒ 维持 wake_fail；四元 reason 已如实留在
+            # probe_adb step（network_unreachable / tv_off 不遮成同一个），⛔ 不冒充 ADB 关。
             return self._finish(self._terminal(WAKE_FAIL, detail='all_wake_channels_failed'), t0)
         self._step('wake', 'ok')
 
@@ -288,7 +300,10 @@ class MorningNewsOrchestrator:
         self._set_stage(STAGE_PROBING)
         quad = r.probe_adb() or {}
         self._step('probe_adb', 'ok', {'quad': quad})
-        if quad.get('value') == 'off' or quad.get('network_reachable') is False:
+        # 2026-11-19 Chief 复核：network_reachable 现在是 ICMP，语义≠ADB；能走到这里
+        # wake 已成功、ADB 必通，⛔ 再用 ping 当 ADB 判据——否则 ping 抖一下就把正常
+        # 腿误降级成 adb_off_tv_on（新探针造假降级）。正常路径的 ADB 判据用 adb_reachable。
+        if quad.get('value') == 'off' or quad.get('adb_reachable') is False:
             # 降级终态：电视已亮、ADB 不可用、新闻未执行。AF 播降级话术、⛔ 不关回。
             return self._finish(self._terminal(ADB_OFF_TV_ON, detail='adb_unavailable'), t0)
 

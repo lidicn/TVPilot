@@ -282,16 +282,29 @@ class ADBRunner:
 
     # 2. ADB 四元探针：接 af_probe.classify_adb_health 做病因分型
     def probe_adb(self):
+        """2026-11-19 链主修法①②：`network_reachable` 改真网络探针（ICMP ping），
+        ⛔ 不再用 adb.tv_online()（ADB 关时必 false，分不出「ADB 关」vs「网断」）。
+        ADB 不通但网通 ⇒ setting 未读，明确置 adbd_alive='stopped'／setting=None 交给
+        classify 走 setting_unreadable/etiology_undetermined，由编排前置判 adb_off_tv_on。
+        """
         from tvpilot import adb, af_probe, state
         quad = {'last_checked': time.time()}
-        try:
-            quad['network_reachable'] = bool(adb.tv_online())
-            out = adb.adb_shell_output('pidof adbd', timeout=5) or ''
-            quad['adbd_alive'] = 'running' if out.strip() else 'stopped'
-            s = (adb.adb_shell_output('settings get global adb_enabled', timeout=5) or '').strip()
-            quad['adb_enabled_setting'] = s or None
-        except Exception as exc:
-            quad['probe_error'] = type(exc).__name__
+        # 真网络探针（不依赖 adb）：ping 通电视 IP 才算网通
+        net_ok = bool(adb.network_ping())
+        quad['network_reachable'] = net_ok
+        adb_ok = bool(adb.tv_online())
+        if adb_ok:
+            try:
+                out = adb.adb_shell_output('pidof adbd', timeout=5) or ''
+                quad['adbd_alive'] = 'running' if out.strip() else 'stopped'
+                s = (adb.adb_shell_output('settings get global adb_enabled', timeout=5) or '').strip()
+                quad['adb_enabled_setting'] = s or None
+            except Exception as exc:
+                quad['probe_error'] = type(exc).__name__
+        else:
+            # ADB 不通：Setting 读不到，如实留空；网通+ADB断 ≠ 网断（后者 net_ok=False）
+            quad['adbd_alive'] = 'stopped'
+            quad['adb_enabled_setting'] = None
         power = 'on'
         try:
             scr = state.get_screen_state() or {}
@@ -302,6 +315,7 @@ class ADBRunner:
         res = af_probe.classify_adb_health(quad, power=power)
         out = dict(res)
         out['network_reachable'] = quad.get('network_reachable')
+        out['adb_reachable'] = adb_ok          # 与 network_reachable 分开留证，便于区分病因
         self.last_evidence['probe_adb'] = out
         return out
 

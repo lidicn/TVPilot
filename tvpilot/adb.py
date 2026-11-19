@@ -267,7 +267,33 @@ def tv_online():
         return False
 
 
+def adb_host_ip():
+    """从 ADB_HOST（host:port）取纯 IP，供真网络探针用。无端口则原样返回。"""
+    host = ADB_HOST or ''
+    return host.rsplit(':', 1)[0] if ':' in host else host
+
+
+def network_ping(timeout=2):
+    """真网络探针（2026-11-19 链主修法①）：ICMP ping 电视 IP，⛔ 不依赖 adb。
+
+    与 tv_online() 的区别：tv_online 测的是「ADB 通不通」，电视把 ADB 开关关掉时
+    必然 False，无法区分「ADB 关」与「网断/电视关机」。本函数只看网络层——只要
+    电视 IP 能 ping 通就返回 True（含 ADB 关闭、电视开机的情形）。
+    :return: bool。ping 不可用/异常一律 False（fail-closed，不假装网通）。
+    """
+    ip = adb_host_ip()
+    if not ip:
+        return False
+    try:
+        r = subprocess.run(['ping', '-c', '1', '-W', str(timeout), ip],
+                           capture_output=True, timeout=timeout + 2)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 __all__ = [
     'ADB_HOST', 'ADB', '_CMD_LOCK', '_adb_state',
     'adb_ready', '_adb_argv', 'adb_cmd', 'adb_shell_output', 'tv_online',
+    'adb_host_ip', 'network_ping',
 ]
