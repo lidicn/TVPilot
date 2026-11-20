@@ -397,6 +397,10 @@ class _ObsRunner:
                                              'lastchannel_id': '21',
                                              'play_state_playing': True,
                                              'foreground_app': 'com.android.smart.terminal.iptv'}},
+            'launch_iptv': {'method': 'am_start_asserted', 'log_cleared': True,
+                            'crash_marker': False, 'final_focus':
+                            'com.android.smart.terminal.iptv/com.amt.app.IPTVActivity',
+                            'wait_ms': 1234.5, 'attempts': 1},
         }
     def wake(self): return True
     def probe_adb(self): return {'value': 'ok', 'quad': {}}
@@ -435,6 +439,31 @@ ck('H6 steps status序列未变',
        ('wake', 'ok'), ('probe_adb', 'ok'), ('launch_iptv', 'ok'),
        ('zap', 'ok'), ('verify_frame', 'ok')],
    [(s['step'], s['status']) for s in _rec['steps']])
+# H7（编排侧观测透传）：launch step evidence 非空且含 method/log_cleared/crash_marker。
+# 防 2026-11-20 正常腿那种「runner 有值、编排没摊、回执里 {}」的缺口回归。
+_launch_ev = _steps.get('launch_iptv', {}).get('evidence', {})
+ck('H7 编排侧launch step透传method/log_cleared/crash_marker',
+   _launch_ev.get('method') == 'am_start_asserted'
+   and _launch_ev.get('log_cleared') is True
+   and _launch_ev.get('crash_marker') is False, _launch_ev)
+# H8 失败路径同样透传（:313），不能只在 ok 路径摊
+class _LaunchFailWithEv:
+    def wake(self): return True
+    def probe_adb(self): return {'value': 'ok', 'quad': {}}
+    def launch_iptv(self):
+        self.last_evidence = {'launch_iptv': {
+            'method': 'am_start_asserted', 'log_cleared': True,
+            'crash_marker': True, 'attempts': 3, 'timed_out': True}}
+        return False
+    def zap(self, no): return False
+    def read_frame(self): return None
+    def screen_on(self): return True
+    def sleep(self, s): pass
+_rec_lf = MorningNewsOrchestrator(runner=_LaunchFailWithEv(), publisher=lambda *a: None).run()
+_lf_ev = next((s['evidence'] for s in _rec_lf['steps'] if s['step'] == 'launch_iptv'), {})
+ck('H8 编排侧launch失败路径也透传evidence',
+   _lf_ev.get('method') == 'am_start_asserted' and _lf_ev.get('crash_marker') is True,
+   _lf_ev)
 
 # ---- I ADB-off 腿修法（链主 2026-11-19 四修）：真网络探针 + wake失败先probe ----
 # I1/I2：network_reachable 用 ICMP network_ping，不再用 tv_online
@@ -695,7 +724,8 @@ _result = {
                       '⑱launch前台断言:am start+crash_marker+防假ok',
                        '⑱每次启动前logcat-c清缓冲+首崩次成attempts=2断言',
                        '⑱log_cleared真实bool(异常/denied关键词⇒False,成功⇒True)+evidence双路径透传',
-                       '⑲ I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向'],
+                       '⑲ I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向',
+                       '编排侧launch evidence透传(method/log_cleared/crash_marker)成功+失败路径'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:

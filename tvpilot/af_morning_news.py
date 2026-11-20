@@ -310,12 +310,19 @@ class MorningNewsOrchestrator:
         # 3. IPTV 全屏（一期无 ArcFace / tvdesk / faceid 步）
         self._set_stage(STAGE_IPTV_LAUNCHING)
         if not r.launch_iptv():
-            self._step('launch_iptv', 'failed')
+            # 观测小改（2026-11-20）：编排侧摊 launch evidence（失败路径），
+            # ⛔ 不改六值/status/话术；fake runner 无 last_evidence ⇒ 空字典，离线矩阵不回退。
+            _launch_ev_fail = dict(getattr(r, 'last_evidence', {}).get('launch_iptv', {}))
+            self._step('launch_iptv', 'failed', _launch_ev_fail)
             # v2.2：三路径共用 iptv_fail；S3/S4 未取得 ⇒ unknown+capture_failed
             return self._finish(self._terminal(
                 IPTV_FAIL, detail='iptv_launch_failed',
                 frame_reason='capture_failed'), t0)
-        self._step('launch_iptv', 'ok')
+        # 观测小改（2026-11-20）：编排侧摊 launch evidence——把 runner 的
+        # method/log_cleared/crash_marker 透传进回执，⛔ 不改六值/status/话术。
+        # fake runner 无 last_evidence ⇒ 空字典，离线矩阵不回退。
+        _launch_ev = dict(getattr(r, 'last_evidence', {}).get('launch_iptv', {}))
+        self._step('launch_iptv', 'ok', _launch_ev)
 
         # 4. 选台 CCTV1
         self._set_stage(STAGE_CHANNEL_SETTING)
