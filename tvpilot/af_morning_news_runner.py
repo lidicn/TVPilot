@@ -81,9 +81,6 @@ class ADBRunner:
     STREAM_STOP_WAIT_S = 2
     # ⑭ 修法②（2026-11-20 链主）：守卫窗内 URL 行重扫 3 次（命中即提前收尾）。
     LIVEPATH_RESCAN_N = 3
-    # ⑭ 修法①：已在目标台时先切的"非目标台"（2=深圳都市/21=中央一台，频道表必有）。
-    ZAP_DETOUR_NO = '2'
-    ZAP_DETOUR_ALT_NO = '21'
 
     def _read_livepath_logcat(self):
         """默认 livePath 读取器（2026-11-19 第四笔，Chief 实测定参）。
@@ -480,27 +477,6 @@ class ADBRunner:
         }
 
     # 4. 换台：复用 tool_zap（逐位数字键注入 + 两级播放页守卫）
-    def _force_real_zap(self, channel_no, tools):
-        """⑭ 修法①（2026-11-20 链主候选①）：已在目标台时先切非目标台强制真换。
-
-        冷启动 brought-to-front 后 IPTV 可能已停在目标台，注入同台号不重打
-        setDataSource --livePath URL 行 ⇒ 流里无 URL ⇒ livepath_absent 假红。
-        当前台（缓存）== 目标台时，先注入一台非目标台，随后主注入产生真换台 URL。
-        ⛔ 读不到当前台 / detour 失败都不阻断主换台；不碰 S4 判据。
-        """
-        try:
-            from tvpilot import state
-            cur = state.get_current_channel() or {}
-            if str(cur.get('no')) != str(channel_no):
-                return None
-            detour = (self.ZAP_DETOUR_ALT_NO if str(channel_no) == self.ZAP_DETOUR_NO
-                      else self.ZAP_DETOUR_NO)
-            tools.tool_zap(detour)
-            self.last_evidence['zap_detour'] = detour
-            return detour
-        except Exception:
-            return None
-
     def zap(self, channel_no):
         import subprocess
         from tvpilot import tools, iptv
@@ -518,9 +494,9 @@ class ADBRunner:
         # 第五笔：logcat -c 之后、注入之前起独立 logcat 流（覆盖守卫等待期+注入）。
         # 真流在 _collect_livepath_stream 里收；fake reader 模式本调用返回 False、不走流。
         self._start_livepath_stream()
-        # ⑭ 修法①：起流后、主注入前，若当前已在目标台先切非目标台强制真换，保证 URL 行重打。
-        # detour 与主注入都在同一条流窗口内，解析取最后一条 URL ⇒ 仍解出目标台。
-        self._force_real_zap(channel_no, tools)
+        # ⑭ 修法①（detour 强制真换）已于 2026-11-20 回退：持久化缓存判当前台不可靠，
+        # brought-to-front 态注入非目标台会把前台切到 ExternalSourceActivity ⇒ 主注入守卫失败。
+        # 仅保留候选③（收流窗内 URL 行重扫）。
         # Chief 复核补：tool_zap 若抛异常，真流已成孤儿（L343 无 try → _abort 不执行，
         # logcat 进程+临时文件留到下次 zap/重启）。异常路径先无条件收流再原样上抛。
         try:

@@ -1,8 +1,8 @@
 {
   "date": "2026-11-17",
   "scope": "电视联动三要素修复离线验收（零真机/零MQTT/零凭据）",
-  "checks_total": 106,
-  "checks_pass": 106,
+  "checks_total": 105,
+  "checks_pass": 105,
   "checks_failed": [],
   "exit_code": 0,
   "new_branches": [
@@ -25,7 +25,7 @@
     "⑱log_cleared真实bool(异常/denied关键词⇒False,成功⇒True)+evidence双路径透传",
     "⑲ I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向",
     "编排侧launch evidence透传(method/log_cleared/crash_marker)成功+失败路径",
-    "⑭真换detour(已在该台先切非目标台)+守卫窗内URL行重扫3次"
+    "⑭守卫窗内URL行重扫3次(detour候选①因真机切走前台已回退)"
   ],
   "products_hash_stable": true
 }
