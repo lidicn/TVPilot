@@ -693,6 +693,47 @@ else:
     _tvpkg.tools.tool_combo_go_home = _orig_home
 _rn_mod.time.time = _orig_time   # 恢复
 
+# ---- ⑭ URL 行间歇丢失修法（链主 2026-11-20）：强制真换 + 守卫窗内重扫 ----
+import tvpilot.adb as _adb14
+_orig_adb_cmd14 = _adb14.adb_cmd
+_adb14.adb_cmd = lambda *a, **k: None          # 离线不打真机 logcat -c
+class _ZapTools14:
+    def __init__(self): self.calls = []
+    def tool_zap(self, no):
+        self.calls.append(str(no))
+        return ({'method': 'adb_digits'}, None, None)
+_orig_tools14 = _tvpkg.tools
+# ① 当前台==目标台（_stub 默认 no=21）⇒ 先切非目标台再主注入，强制真换重打 URL
+_zt_a = _ZapTools14()
+_tvpkg.tools = _zt_a
+r14a = ADBRunner(livepath_reader=lambda: FAKE_LOG)
+ok14a = r14a.zap(21)
+ck('⑭-1 已在目标台⇒先detour非目标台再主注入',
+   ok14a is True and _zt_a.calls == ['2', '21']
+   and r14a.last_evidence.get('zap_detour') == '2',
+   (_zt_a.calls, r14a.last_evidence.get('zap_detour')))
+# ② 当前台!=目标台 ⇒ 不 detour，保持单次注入（不增加闪烁）
+_zt_b = _ZapTools14()
+_tvpkg.tools = _zt_b
+_orig_cur14 = _stub.get_current_channel
+_stub.get_current_channel = lambda: {'name': '深圳都市', 'no': 2}
+try:
+    r14b = ADBRunner(livepath_reader=lambda: FAKE_LOG)
+    ok14b = r14b.zap(21)
+    ck('⑭-2 不在目标台⇒不detour(保持单次注入)',
+       ok14b is True and _zt_b.calls == ['21'] and 'zap_detour' not in r14b.last_evidence,
+       _zt_b.calls)
+finally:
+    _stub.get_current_channel = _orig_cur14
+_tvpkg.tools = _orig_tools14
+_adb14.adb_cmd = _orig_adb_cmd14
+# ③ 静态：守卫窗内 3 段重扫 + 强制真换调用点都在
+_r14src = open(os.path.join(_PKG, 'af_morning_news_runner.py'), encoding='utf-8').read()
+ck('⑭-3 守卫窗内URL行重扫3次+强制真换调用点',
+   'LIVEPATH_RESCAN_N = 3' in _r14src
+   and 'self._livepath_url_present(path)' in _r14src
+   and 'self._force_real_zap(channel_no, tools)' in _r14src)
+
 # ---- E fail-closed / 凭据 ----
 ck('E1 runner 默认 livepath_reader 存在', hasattr(ADBRunner, '_read_livepath_logcat'))
 ck('E2 真值 URL 未进 evidence（零打印）',
@@ -725,7 +766,8 @@ _result = {
                        '⑱每次启动前logcat-c清缓冲+首崩次成attempts=2断言',
                        '⑱log_cleared真实bool(异常/denied关键词⇒False,成功⇒True)+evidence双路径透传',
                        '⑲ I5b真机形态unknown+成对读数⇒adb_off_tv_on正控+I5c反向',
-                       '编排侧launch evidence透传(method/log_cleared/crash_marker)成功+失败路径'],
+                       '编排侧launch evidence透传(method/log_cleared/crash_marker)成功+失败路径',
+                       '⑭真换detour(已在该台先切非目标台)+守卫窗内URL行重扫3次'],
     'products_hash_stable': True,
 }
 with open(_RESULT, 'w', encoding='utf-8') as f:
